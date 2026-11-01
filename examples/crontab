@@ -1,0 +1,4 @@
+# Every night at 02:00 local time. `crontab -e` and paste, with your path.
+# cron has a bare environment: set PATH so claude, gh and jq are found.
+PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin
+0 2 * * * /path/to/your-repo/scripts/run.sh
