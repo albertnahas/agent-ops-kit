@@ -14,7 +14,7 @@ On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this
 | `.claude/settings.json` | Wires the guard with `onFailure: block`, so a broken hook stops the call instead of letting it through. Adds deny rules. |
 | `scripts/run.sh` | Runs one loop with turn and budget caps. Checks the charter's pause line before Claude starts. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
-| `scripts/loop-stats.sh` | Your track record as JSON. Publish it. |
+| `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
 | `tests/hooks.test.sh` | Feeds known commands to both hooks and checks what they block. |
 | `examples/` | A crontab line, a cloud scheduled task prompt, and a GitHub Actions workflow that grades in CI. |
 
