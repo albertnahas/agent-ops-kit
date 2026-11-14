@@ -24,3 +24,4 @@ Do not trust the PR body's claims. Check them against the diff.
 First line: the grade. Then each finding as file:line, what is wrong,
 and the evidence. Grade X if the diff touches any X surface, even if
 the change looks correct.
+Post the grade as a PR comment starting `**Grade: <letter>**` on every PR, not only X.
