@@ -33,7 +33,7 @@ Never lower a baseline to match a worse run, or a stall reads green. Any KPI dow
 
 ## Merge policy (graded)
 
-Every PR is graded by an independent reviewer: the `pr-grader` subagent, with fresh context, reading only this section, the PR body and the diff. It judges the code, not the author's reasoning. A human sees only grade X.
+Every PR is graded by an independent reviewer: the `pr-grader` subagent, with fresh context, reading only this section, the PR body and the diff. It judges the code, not the author's reasoning. A human sees only grade X. The reviewer posts its grade on every PR, not only X, as a PR comment starting `**Grade: <letter>**`.
 
 - **A, merge.** Correct, verified, fully undone by a revert. Squash-merge.
 - **B, fix then merge.** Real but fixable findings: a bug, a console error, a visual flaw, a stale assumption. Fix on the branch, verify, grade again, merge. Never park a PR on a B.
@@ -53,7 +53,7 @@ X means a revert won't fully undo it:
 
 Not X, so grade A, B or C: copy, UI, seasonal looks, product limits, admin and analytics pages, the rest of this charter. <Add yours.>
 
-**Verified** means lint, typecheck, build and tests pass, the deploy preview is green, and anything that renders was rendered at phone width and looked at, with a clean console. Tests pass while artwork is hidden or hydration fails, so a UI change without a screenshot and console output in the PR is a B at most.
+**Verified** means lint, typecheck, build and tests pass, the deploy preview is green, and anything that renders was rendered at phone width and looked at, with a clean console. Tests pass while artwork is hidden or hydration fails, so a UI change without a screenshot and console output in the PR is a B at most. A PR that changes something a user sees also uploads a phone-width video of that journey, recorded with Playwright from test data only, as `pr-<number>-<journey>.mp4` on the repo's `proofs` pre-release, and links it in the PR body; the reviewer grades a PR without one B. Record with `video: 'on'` on an iPhone viewport, convert with `ffmpeg -i in.webm -pix_fmt yuv420p -movflags +faststart out.mp4`, then `gh release upload proofs <file> --clobber` (create it once with `gh release create proofs --prerelease --notes 'PR proof videos'`).
 
 ## Each run
 
