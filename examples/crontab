@@ -1,4 +1,12 @@
-# Every night at 02:00 local time. `crontab -e` and paste, with your path.
-# cron has a bare environment: set PATH so claude, gh and jq are found.
+# `crontab -e` and paste, with your paths.
+# cron has a bare environment: set PATH so claude, gh, jq and python3 are found.
 PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin
+# Where every loop logs its runs and checks. Make it a private git repo for the cloud watcher.
+AGENT_OPS_DIR=/path/to/agent-ops
+# Any command that takes a subject and a body: a mail script, a Telegram bot, ntfy.
+AGENT_OPS_NOTIFY=/path/to/notify.sh
+
+# The agent loop, every night at 02:00 local time.
 0 2 * * * /path/to/your-repo/scripts/run.sh
+# The heartbeat, every morning at 08:00.
+0 8 * * * /path/to/your-repo/bin/heartbeat.py
