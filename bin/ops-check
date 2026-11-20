@@ -1,0 +1,15 @@
+#!/bin/bash
+# ops-check [-l loop] -- <command...>
+# The outcome check every scheduled loop ends with: a cheap command, no LLM, that exits 0
+# only when the run did its job (the report landed, the post reads back). Prints and appends
+# one ledger line: {"loop","date","check":"pass"|"fail","detail"}. A loop's success is its
+# last check, not Claude's exit code. Loop name defaults as in claude-run.
+OPS="${AGENT_OPS_DIR:-$HOME/.agent-ops}"; mkdir -p "$OPS"
+LOOP="${OPS_LOOP:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")}"
+[ "$1" = "-l" ] && { LOOP="$2"; shift 2; }
+[ "$1" = "--" ] && shift
+out=$("$@" 2>&1); code=$?
+status=$([ $code -eq 0 ] && echo pass || echo fail)
+jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T)" --arg s "$status" --arg detail "$(printf '%s' "$out" | tail -3 | cut -c1-300)" \
+  '{loop:$loop,date:$d,check:$s,detail:$detail}' | tee -a "$OPS/runs.jsonl"
+exit $code
