@@ -59,7 +59,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `scripts/run.sh` | Runs one loop with turn and budget caps, after checking the charter's pause line, and ends with the outcome check. |
 | `bin/claude-run` | Drop-in for `claude -p`. Logs each run's exit, turns and cost to `$AGENT_OPS_DIR/runs.jsonl` (default `~/.agent-ops`). |
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
-| `checks/report-landed.sh` | Example check: today's report is on main with every section. Write one per loop; it's the only definition of "done" that doesn't trust the agent. |
+| `checks/report-landed.sh` | Example check: today's report landed, on main or its PR branch, with every section. Write one per loop; it's the only definition of "done" that doesn't trust the agent. |
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop or a run over 3x its usual cost, at most every 3 days per alert. Writes `COSTS.md`. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
