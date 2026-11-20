@@ -37,7 +37,7 @@ cp -R .claude bin checks docs scripts tests /path/to/your-repo/
 ```
 
 ```bash
-cd /path/to/your-repo && gh label create founder && gh repo edit --delete-branch-on-merge
+cd /path/to/your-repo && for l in founder grade:A grade:B grade:C grade:X; do gh label create "$l"; done; gh repo edit --delete-branch-on-merge
 ```
 
 1. Fill in every `<placeholder>` in `docs/AGENT_LOOP.md` and add your own X surfaces.
