@@ -17,7 +17,14 @@ LEDGER = OPS / "runs.jsonl"
 now = dt.datetime.now()
 alerts = {}
 
-runs = [json.loads(l) for l in LEDGER.read_text().splitlines() if l.strip()] if LEDGER.exists() else []
+runs = []
+for n, line in enumerate(LEDGER.read_text().splitlines() if LEDGER.exists() else [], 1):
+    if not line.strip():
+        continue
+    try:
+        runs.append(json.loads(line))
+    except ValueError:
+        alerts[f"ledger:{n}"] = f"runs.jsonl line {n} isn't JSON, so it was skipped: {line[:100]}"
 by_loop = {}
 for r in runs:
     if r["loop"] != "heartbeat":

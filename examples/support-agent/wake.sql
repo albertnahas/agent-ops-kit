@@ -85,7 +85,7 @@ BEGIN
 
   FOR t IN
     SELECT id FROM support_tickets
-    WHERE resolved_at IS NULL AND escalated_at IS NULL AND replied_at IS NULL
+    WHERE handled_by IS NULL AND resolved_at IS NULL AND escalated_at IS NULL AND replied_at IS NULL
       AND agent_attempts < 3
       AND (agent_fired_at IS NULL OR agent_fired_at < now() - interval '30 minutes')
     ORDER BY created_at
