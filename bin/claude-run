@@ -13,7 +13,7 @@ for a in "$@"; do
 done
 start=$(date +%s)
 out=$(claude "${args[@]}" --output-format json); code=$?
-jq -c --arg loop "$LOOP" --arg d "$(date +%FT%T)" --argjson secs $(( $(date +%s) - start )) --argjson exit $code \
+[ -n "$out" ] && jq -c --arg loop "$LOOP" --arg d "$(date +%FT%T)" --argjson secs $(( $(date +%s) - start )) --argjson exit $code \
   '{loop:$loop,date:$d,secs:$secs,exit:$exit,subtype,turns:.num_turns,cost:.total_cost_usd,tokens_in:(.usage.input_tokens+.usage.cache_read_input_tokens+.usage.cache_creation_input_tokens),tokens_out:.usage.output_tokens}' \
   <<<"$out" >>"$OPS/runs.jsonl" 2>/dev/null \
   || jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T)" --argjson exit $code '{loop:$loop,date:$d,exit:$exit,subtype:"no_json"}' >>"$OPS/runs.jsonl"

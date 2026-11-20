@@ -22,9 +22,12 @@ for n, line in enumerate(LEDGER.read_text().splitlines() if LEDGER.exists() else
     if not line.strip():
         continue
     try:
-        runs.append(json.loads(line))
+        r = json.loads(line)
+        if not isinstance(r, dict) or not {"loop", "date"} <= r.keys():
+            raise ValueError
+        runs.append(r)
     except ValueError:
-        alerts[f"ledger:{n}"] = f"runs.jsonl line {n} isn't JSON, so it was skipped: {line[:100]}"
+        alerts[f"ledger:{n}"] = f"runs.jsonl line {n} isn't a run, so it was skipped: {line[:100]}"
 by_loop = {}
 for r in runs:
     if r["loop"] != "heartbeat":
