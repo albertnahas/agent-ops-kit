@@ -33,7 +33,7 @@ Never lower a baseline to match a worse run, or a stall reads green. Any KPI dow
 
 ## Merge policy (graded)
 
-Small, quick fixes skip the PR: a few lines that touch no X surface below, verified, go straight to main. Everything else is a PR, and every PR is graded by an independent reviewer: the `pr-grader` subagent, with fresh context, reading only this section, the PR body and the diff. It judges the code, not the author's reasoning. A human sees only grade X. The run posts the reviewer's grade on every PR, not only X, as a PR comment starting `**Grade: <letter>**`, labels the PR `grade:<letter>` (dropping any older grade label) and ends its body with a `## Grade` section: the letter, the reviewer's one-line verdict and a link to that comment. A regrade replaces both, so the label and the body always show the latest grade.
+Every PR is graded by an independent reviewer: the `pr-grader` subagent, with fresh context, reading only this section, the PR body and the diff. It judges the code, not the author's reasoning. A human sees only grade X. The run posts the reviewer's grade on every PR, not only X, as a PR comment starting `**Grade: <letter>**`, labels the PR `grade:<letter>` (dropping any older grade label) and ends its body with a `## Grade` section: the letter, the reviewer's one-line verdict and a link to that comment. A regrade replaces both, so the label and the body always show the latest grade.
 
 - **A, merge.** Correct, verified, fully undone by a revert. Squash-merge.
 - **B, fix then merge.** Real but fixable findings: a bug, a console error, a visual flaw, a stale assumption. Fix on the branch, verify, grade again, merge. Never park a PR on a B.
