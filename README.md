@@ -2,7 +2,7 @@
 
 The setup I use to run a live product on a night shift of Claude Code agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
-On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this setup has merged 157 PRs since July 2026. 114 came from the scheduled loop and the rest from Claude Code sessions I directed. One was reverted. The full numbers, with the method, are at [nightshiftdev.xyz/log](https://nightshiftdev.xyz/log).
+On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this setup has merged 157 PRs since July 2026. 114 came from the scheduled loop and the rest from Claude Code sessions I directed. One was reverted.
 
 ## What's inside
 
@@ -72,13 +72,4 @@ The support agent comes later. It needs a product with a ticket table and a depl
 - "Verified" for UI means the author rendered the page and attached a screenshot and console output. That evidence still comes from the author, and it's the weakest link.
 - This has run on one product with one human. If you run it on a team, I'd like to hear what breaks.
 
-## Guides
-
-The reasoning behind each piece, with the incidents that shaped it:
-
-- [Agent charter](https://nightshiftdev.xyz/guides/agent-charter)
-- [AI PR review and auto-merge](https://nightshiftdev.xyz/guides/ai-pr-review-auto-merge)
-- [Claude Code hooks](https://nightshiftdev.xyz/guides/claude-code-hooks)
-- [Run Claude Code on a schedule](https://nightshiftdev.xyz/guides/run-claude-code-on-a-schedule)
-
-MIT licensed. By [Albert Nahas](https://nightshiftdev.xyz).
+MIT licensed. By [Albert Nahas](https://github.com/albertnahas).
