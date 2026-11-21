@@ -2,7 +2,7 @@
 
 The setup I use to run a live product on a night shift of Claude Code agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
-On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this setup has merged 157 PRs since July 2026. 114 came from the scheduled loop and the rest from Claude Code sessions I directed. One was reverted.
+On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 PRs have merged since July 2026 (as of 21 Nov). The loops opened 170 of them, 77 of which are daily reports. The rest came from Claude Code sessions I directed and a few dependency bots. No loop PR has been reverted. The one revert on main since July undid a pricing change I pushed myself.
 
 ## What's inside
 
