@@ -274,15 +274,13 @@ def build():
     for r in loops.values():
         r["checked_by"] = list(dict.fromkeys(map(resolve, r["checked_by"])))
         r["supervisor"] = r["supervisor"] and resolve(r["supervisor"])
-    # Supervisor is the one loop that writes this loop's Orders, or you. With the column in the registry, a row
-    # with none, a parent that is no loop, or a chain that comes back to the row is flagged on it.
-    if any("Supervisor" in reg for reg in registry):
-        for r in loops.values():
-            chain, up = [r["loop"]], r["supervisor"]
-            while up in loops and up not in chain: chain.append(up); up = loops[up]["supervisor"]
-            r["supervisor_issue"] = ("no supervisor named" if not r["supervisor"]
-                                     else f"supervisor {r['supervisor']} is not a loop in the registry" if r["supervisor"] not in loops | {"you": 0}
-                                     else "supervision comes back to it: " + " → ".join(chain + [up]) if up == r["loop"] else None)
+    # Supervisor, optional, is the one loop that writes this loop's Orders (or you). A parent that is no loop, or a
+    # chain that comes back to the row, is flagged on it.
+    for r in loops.values():
+        chain, up = [r["loop"]], r["supervisor"]
+        while up in loops and up not in chain: chain.append(up); up = loops[up]["supervisor"]
+        r["supervisor_issue"] = (f"supervisor {r['supervisor']} is not a loop in the registry" if r["supervisor"] not in {**loops, "you": 0, None: 0}
+                                 else "supervision comes back to it: " + " → ".join(chain + [up]) if up == r["loop"] else None)
 
     for label, j in jobs.items():
         if label in claimed or j["vendor"] or not j["loaded"]: continue
