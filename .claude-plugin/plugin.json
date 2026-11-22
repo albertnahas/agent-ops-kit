@@ -1,6 +1,6 @@
 {
   "name": "agent-ops-kit",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Run one scheduled Claude Code loop safely: a charter with a graded merge policy, an independent PR grader, a guard hook, a run ledger, outcome checks and a heartbeat. /new-loop sets up a loop from a few questions; the plugin puts claude-run, ops-check, heartbeat.py and new-loop on your path.",
   "author": {
     "name": "Albert Nahas",

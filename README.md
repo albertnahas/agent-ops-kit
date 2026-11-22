@@ -28,13 +28,15 @@ You need Claude Code v2.1.295 or later, `gh`, `jq` and `python3`. Install the pl
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-Then, in the repo you want a loop on, run `/agent-ops-kit:new-loop`, or just ask Claude Code for a new loop. It asks four things: what the loop should achieve, how you'd know it worked as a number it doesn't write, what it must never do, and when and where it runs (launchd, cron or a cloud routine). Then `bin/new-loop` writes the loop the same way every time:
+Then, in the repo you want a loop on, run `/agent-ops-kit:new-loop`, or just ask Claude Code for a new loop. It asks four things: what the loop should achieve, how you'd know it worked as a number it doesn't write, what it must never do, and when and where it runs. [docs/RUNTIMES.md](docs/RUNTIMES.md) settles where: a cloud routine, launchd, cron or a desktop app task. Then `bin/new-loop` writes the loop the same way every time:
 
 - the charter in `docs/loops/<name>.md`, with your words in its Mission, Good block, hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
 - the outcome check in `$AGENT_OPS_DIR/checks/<name>.py`, written before the loop's first prompt: today's report landed, and the number in your Floor holds;
 - a runner that exports `OPS_LOOP` with a budget and turn cap, and a schedule file it doesn't install;
 - a row in `$AGENT_OPS_DIR/REGISTRY.md`;
 - whatever the charter relies on that the repo lacks: the grader, the hooks, `claude-run`, `ops-check` and `scripts/mission-guard`.
+
+To change a loop later, run `/agent-ops-kit:new-loop edit <loop>`. Each change goes the way it should: an Orders PR, a founder PR for anything in a mission block, the status line for a pause, `new-loop --reschedule` for a move, or retirement.
 
 The skill dry runs the check, then leaves three steps to you: merge the PR, bless the charter at your own terminal, and say yes to the schedule. Watch the first week. Read every report and every grade before you trust it.
 
@@ -78,7 +80,8 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `.claude/agents/pr-grader.md` | The grader. A frontmatter hook limits its Bash to `gh pr view` and `gh pr diff`. |
 | `.claude/hooks/guard-bash.sh` | Blocks force pushes and pushes to main, so the agent works through PRs. |
 | `.claude/settings.json` | Wires the guard with `onFailure: block`, so a broken hook stops the call instead of letting it through. Adds deny rules. |
-| `skills/new-loop/`, `bin/new-loop` | The `/new-loop` skill and the script it calls. The script fills the charter from `docs/AGENT_LOOP.md` and the check, runner and registry from `templates/new-loop/`, and exits if the charter template gains a placeholder it can't fill. |
+| `skills/new-loop/`, `bin/new-loop` | The `/new-loop` skill and the script it calls. `questions.json` holds the questions, which the skill, the script's flags and the fleet dashboard's form all read. The script fills the charter from `docs/AGENT_LOOP.md` and the check, runner and registry from `templates/new-loop/`, and exits if the charter template gains a placeholder it can't fill. |
+| `docs/RUNTIMES.md` | Where a loop runs (cloud, Mac, app task or a plain script), what each runtime costs, and the rule that every one leaves a ledger line. |
 | `scripts/run.sh` | Runs one loop with turn and budget caps, after checking the charter's pause line, and ends with the outcome check. |
 | `bin/claude-run` | Drop-in for `claude -p`. Logs each run's exit, turns and cost to `$AGENT_OPS_DIR/runs.jsonl` (default `~/.agent-ops`). |
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
