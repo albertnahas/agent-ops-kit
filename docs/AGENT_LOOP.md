@@ -72,7 +72,7 @@ Not X, so grade A, B or C: copy, UI, seasonal looks, product limits, admin and a
 
 1. Check `status:` above. If it isn't `active`, stop.
 2. Read your Orders, if you have any, and the last 3 reports in `docs/ops-reports/`. The reports are your memory.
-3. **PR sweep, before new work.** For every open PR, whatever its author: rebase on main keeping both sides of a conflict, run the default branch's copy of the mission guard on its head, `git show origin/main:scripts/mission-guard > /tmp/mission-guard && python3 /tmp/mission-guard pr` (with your default branch in place of `main`) (any non-zero exit makes it X, whatever the grade), grade it with `pr-grader`, act on the grade. Merging deploys, so merge one at a time and rebase the next on the result. Only X stays open; an X open more than 14 days leads the report.
+3. **PR sweep, before new work.** For every open PR, whatever its author: rebase on main keeping both sides of a conflict, run the default branch's copy of the mission guard on its head with `git show origin/main:scripts/mission-guard > /tmp/mission-guard && python3 /tmp/mission-guard pr`, naming your default branch in place of `main`. Any non-zero exit makes it X, whatever the grade. Then grade it with `pr-grader`, act on the grade. Merging deploys, so merge one at a time and rebase the next on the result. Only X stays open; an X open more than 14 days leads the report.
 4. Pull today's data. Rank findings by the KPI table.
 5. New work: at most 2 PRs, each small and focused, each traced to a number in today's data. No refactors for taste. One change at a time per surface.
 6. Write the report and land it as a report-only PR.
