@@ -52,6 +52,7 @@ expect "mission-guard pr flags the edit in a checkout" "! (cd $g/w && $PWD/bin/m
 expect "mission-guard pr needs no store" "o=\$(cd $g/w && AGENT_OPS_DIR=\$(mktemp -d) $PWD/bin/mission-guard pr); grep -q '^C.md: ' <<<\"\$o\""
 expect "mission-guard pr passes a steps-only change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && echo more >> \$d/c/C.md && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null)"
 expect "mission-guard pr flags a change to the guard itself" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/scripts && echo 'print(0)' > \$d/c/scripts/mission-guard && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
+expect "mission-guard pr flags a CI workflow change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/.github/workflows && echo x > \$d/c/.github/workflows/ci.yml && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
 expect "mission-guard pr fails closed with no origin" "(d=\$(mktemp -d) && git init -q \$d && cd \$d && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 2 ])"
 c commit -qam edit && c push -q origin HEAD:master
 expect "mission-guard check fails on a pushed edit, with the diff" "o=\$(bin/mission-guard check); [ \$? = 1 ] && grep -q '^    +Always lower' <<<\"\$o\""
@@ -62,6 +63,19 @@ expect "a broken missions.json is a guard failure, not drift" "bin/heartbeat.py 
 mv $AGENT_OPS_DIR/m.bak $AGENT_OPS_DIR/missions.json
 bin/mission-guard bless "$g/w/C.md" >/dev/null
 expect "a bless after the push clears it" "bin/mission-guard check >/dev/null"
+o=$(mktemp -d); git clone -q "$g/origin.git" "$o/c" 2>/dev/null; mkdir -p "$o/c/docs/orders"
+printf '# Orders\n| Order | Moves | Stop rule | Read date |\n|---|---|---|---|\n\n## Changes\n\ndate | why | by\n2026-11-22 | created | you\n' > "$o/c/docs/orders/x.md"
+git -C "$o/c" add . && git -C "$o/c" -c user.name=t -c user.email=t@t commit -qm o && git -C "$o/c" push -q origin HEAD:master
+python3 - "$o/c/docs/orders/x.md" <<'PY'
+import sys; p=sys.argv[1]; s=open(p).read()
+open(p,'w').write(s.replace("|---|---|---|---|\n","|---|---|---|---|\n| Ship a page | visits | none | 2026-12-01 |\n")+"2026-11-23 | new order | sup |\n")
+PY
+expect "mission-guard orders passes one order with one Changes line" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+echo "2026-11-23 | another | sup |" >> "$o/c/docs/orders/x.md"
+expect "mission-guard orders refuses two Changes lines" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+git -C "$o/c" checkout -q -- . ; echo x > "$o/c/README.md"
+expect "mission-guard orders refuses a non-Orders file" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+rm -rf "$o"
 rm -rf "$g"
 
 exit $fail
