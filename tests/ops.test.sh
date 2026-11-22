@@ -36,6 +36,14 @@ expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | 
 h=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 1)\",\"check\":\"fail\"}" > "$h/runs.jsonl"; AGENT_OPS_DIR=$h bin/heartbeat.py >/dev/null
 echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" >> "$h/runs.jsonl"
 expect "a check failing again the next day is held too" "[ \"\$(AGENT_OPS_DIR=$h bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"; rm -rf "$h"
+bin/ops-check -l measured -- sh -c 'echo good: 7 higher; echo good: 42 lower 30; echo 42 open lines; exit 1' >/dev/null
+bin/ops-check -l unbarred -- sh -c 'echo good: 3.5 higher' >/dev/null
+expect "ops-check records a check's last Good number, on a fail too" "grep '\"loop\":\"measured\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.value == 42 and .better == \"lower\" and .bar == 30 and .check == \"fail\"' >/dev/null"
+expect "ops-check records a Good with no bar, and none when a check prints none" "grep '\"loop\":\"unbarred\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.value == 3.5 and (has(\"bar\") | not)' >/dev/null && grep '\"loop\":\"good\"' $AGENT_OPS_DIR/runs.jsonl | jq -e 'has(\"value\") | not' >/dev/null"
+bin/ops-check -l crlf -- printf 'good: 5 higher 3 \r\n' >/dev/null
+bin/ops-check -l malformed -- sh -c 'echo good: 1.2.3 higher; echo good: . lower' >/dev/null
+expect "ops-check reads a Good line with CRLF or trailing blanks" "grep '\"loop\":\"crlf\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.value == 5 and .bar == 3' >/dev/null"
+expect "a malformed Good line is ignored and the check is still logged" "grep '\"loop\":\"malformed\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.check == \"pass\" and (has(\"value\") | not)' >/dev/null"
 expect "ops-check with no command is a usage error, not a pass" "! bin/ops-check -l empty -- 2>/dev/null && ! grep -q '\"loop\":\"empty\"' $AGENT_OPS_DIR/runs.jsonl"
 
 # the watchman survives any ledger: bad bytes, a cut last line, odd field types, Z and offset dates, a future date

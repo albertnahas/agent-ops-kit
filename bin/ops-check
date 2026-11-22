@@ -4,6 +4,9 @@
 # only when the run did its job (the report landed, the post reads back). Prints and appends
 # one ledger line: {"loop","date","check":"pass"|"fail","detail"}. A loop's success is its
 # last check, not Claude's exit code. Loop name defaults as in claude-run.
+# A check that measures its loop's Good prints `good: <value> <higher|lower> [<bar>]` (the bar is
+# the charter's Floor, when it has one); its last such line adds value, better and bar to the ledger
+# line, on a fail too, so a change to the loop can be read against the number before it.
 OPS="${AGENT_OPS_DIR:-$HOME/.agent-ops}"; mkdir -p "$OPS"
 LOOP="${OPS_LOOP:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")}"
 [ "$1" = "-l" ] && { LOOP="$2"; shift 2; }
@@ -12,6 +15,9 @@ LOOP="${OPS_LOOP:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd
 out=$("$@" 2>&1); code=$?
 [ -s "$OPS/runs.jsonl" ] && [ -n "$(tail -c1 "$OPS/runs.jsonl")" ] && echo >> "$OPS/runs.jsonl"  # never glue onto a cut line
 status=$([ $code -eq 0 ] && echo pass || echo fail)
+read -r value better bar <<<"$(printf '%s\n' "$out" | tr -d '\r' | sed 's/[[:space:]]*$//' | grep -E '^good: -?[0-9]+(\.[0-9]+)? (higher|lower)( -?[0-9]+(\.[0-9]+)?)?$' | tail -1 | cut -d' ' -f2-)"
 jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T)" --arg s "$status" --arg detail "$(printf '%s' "$out" | tail -3 | iconv -c -f UTF-8 -t UTF-8 | cut -c1-300)" \
-  '{loop:$loop,date:$d,check:$s,detail:$detail}' | tee -a "$OPS/runs.jsonl"
+  --arg value "$value" --arg better "$better" --arg bar "$bar" \
+  '{loop:$loop,date:$d,check:$s,detail:$detail} + if $value == "" then {} else {value:($value|tonumber),better:$better}
+   + if $bar == "" then {} else {bar:($bar|tonumber)} end end' | tee -a "$OPS/runs.jsonl"
 exit $code
