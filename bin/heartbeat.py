@@ -22,9 +22,12 @@ now = dt.datetime.now()
 alerts = {}
 
 def when(date):
-    """A ledger date as local time without a zone, so writers with and without offsets compare; None if it isn't one."""
-    try: t = dt.datetime.fromisoformat(date.replace("Z", "+00:00"))
-    except (AttributeError, ValueError): return None
+    """A ledger date as local time without a zone, so writers with and without offsets compare; None if it isn't one.
+    Z, ±HHMM and any fraction are rewritten first: Python 3.9, the macOS system python, reads only ±HH:MM and 3 or 6 digits."""
+    try:
+        date = re.sub(r"Z$|([+-]\d\d):?(\d\d)$", lambda m: f"{m[1]}:{m[2]}" if m[1] else "+00:00", date)
+        t = dt.datetime.fromisoformat(re.sub(r"\.(\d+)", lambda m: "." + m[1][:6].ljust(6, "0"), date))
+    except (TypeError, ValueError): return None
     return t.astimezone().replace(tzinfo=None) if t.tzinfo else t
 
 runs = []
@@ -115,5 +118,5 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     sync = git("pull", "-q", "--rebase")
     if sync.returncode: git("rebase", "--abort")
     else: sync = git("push", "-q")
-    if sync.returncode: log("fail", "the ops repo didn't sync: " + (sync.stderr.strip().splitlines() or ["?"])[-1][:200])
+    if sync.returncode: log("fail", "the ops repo didn't sync: " + next((l for l in sync.stderr.splitlines() if l.startswith(("fatal:", "error:"))), sync.stderr.strip()[-200:])[:200])
 print(json.dumps({"alerts": list(alerts), "sent": [] if undelivered else list(due)}))
