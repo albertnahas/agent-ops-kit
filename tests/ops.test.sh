@@ -75,8 +75,8 @@ expect "mission-guard check ignores an unpushed edit" "bin/mission-guard check >
 expect "mission-guard pr flags the edit in a checkout" "! (cd $g/w && $PWD/bin/mission-guard pr >/dev/null)"
 expect "mission-guard pr needs no store" "o=\$(cd $g/w && AGENT_OPS_DIR=\$(mktemp -d) $PWD/bin/mission-guard pr); grep -q '^C.md: ' <<<\"\$o\""
 expect "mission-guard pr passes a steps-only change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && echo more >> \$d/c/C.md && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null)"
-expect "mission-guard pr flags a change to the guard itself" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/scripts && echo 'print(0)' > \$d/c/scripts/mission-guard && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
-expect "mission-guard pr flags a CI workflow change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/.github/workflows && echo x > \$d/c/.github/workflows/ci.yml && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
+expect "mission-guard pr flags a change to the guard itself" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/scripts && echo 'print(0)' > \$d/c/scripts/mission-guard && cd \$d/c && git add -A && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
+expect "mission-guard pr flags a CI workflow change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/.github/workflows && echo x > \$d/c/.github/workflows/ci.yml && cd \$d/c && git add -A && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
 expect "mission-guard pr fails closed with no origin" "(d=\$(mktemp -d) && git init -q \$d && cd \$d && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 2 ])"
 c commit -qam edit && c push -q origin HEAD:master
 expect "mission-guard check fails on a pushed edit, with the diff" "o=\$(bin/mission-guard check); [ \$? = 1 ] && grep -q '^    +Always lower' <<<\"\$o\""
@@ -97,9 +97,9 @@ PY
 expect "mission-guard orders passes one order with one Changes line" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 echo "2026-11-23 | another | sup |" >> "$o/c/docs/orders/x.md"
 expect "mission-guard orders refuses two Changes lines" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
-git -C "$o/c" checkout -q -- . ; echo x > "$o/c/README.md"
+git -C "$o/c" checkout -q -- . ; echo x > "$o/c/README.md"; git -C "$o/c" add -A
 expect "mission-guard orders refuses a non-Orders file" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
-git -C "$o/c" checkout -q -- . ; git -C "$o/c" clean -qf; cp examples/orders.md "$o/c/docs/orders/new.md"
+git -C "$o/c" reset -q --hard; git -C "$o/c" clean -qf; cp examples/orders.md "$o/c/docs/orders/new.md"; git -C "$o/c" add -A
 expect "mission-guard orders passes a new Orders file from the example" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 rm "$o/c/docs/orders/new.md"; mkdir -p "$o/c/.github/workflows"; echo on: push > "$o/c/.github/workflows/ci.yml"
 git -C "$o/c" add . && git -C "$o/c" -c user.name=t -c user.email=t@t commit -qm ci && git -C "$o/c" push -q origin HEAD:master
@@ -116,13 +116,16 @@ hc() { git -C "$h/w" -c user.name=t -c user.email=t@t "$@"; }
 hc add -A && hc commit -qm base && hc push -q origin HEAD:main
 guard() { (cd "$h/w" && "$OLDPWD/bin/mission-guard" "$@" >/dev/null); echo $?; }
 reset() { hc checkout -q -f main && hc reset -q --hard origin/main && hc clean -qfd; hc checkout -q -B pr; }
-for f in .github/workflows/é.yml .claude/settings.local.json .claude/skills/x/SKILL.md .claude/commands/x.md CLAUDE.md docs/CLAUDE.md .mcp.json .husky/pre-commit scripts/run.sh bin/claude-run bin/ops-check checks/report-landed.sh; do
+for f in .github/workflows/é.yml .github/actions/x/action.yml pkg/.claude/settings.json CLAUDE.local.md AGENTS.md .claude/settings.local.json .claude/skills/x/SKILL.md .claude/commands/x.md CLAUDE.md docs/CLAUDE.md .mcp.json .husky/pre-commit scripts/run.sh bin/claude-run bin/ops-check checks/report-landed.sh; do
   reset; mkdir -p "$h/w/$(dirname "$f")"; echo x > "$h/w/$f"; hc add -Af; hc commit -qm p
   expect "mission-guard pr protects $f" "[ \$(guard pr) = 1 ]"
 done
 reset; hc checkout -q main; cp "$h/w/docs/C.md" "$h/w/docs/CHARTÉ.md"; hc add -A; hc commit -qm uni; hc push -q origin HEAD:main
 reset; echo hi > "$h/w/README.md"
 expect "mission-guard pr passes an unrelated PR next to a non-ASCII charter" "[ \$(guard pr) = 0 ]"
+mkdir -p "$h/w/.claude/worktrees/w1"; echo x > "$h/w/.claude/worktrees/w1/f"
+expect "mission-guard pr ignores untracked files, a worktree under .claude/ included" "[ \$(GIT_CONFIG_GLOBAL=/dev/null guard pr) = 0 ]"
+rm -r "$h/w/.claude"
 hc add -A; hc commit -qm r; hc checkout -q main; hc reset -q --hard origin/main
 printf '<!-- mission -->\nnever spend money\n' >> "$h/w/docs/C.md"; hc commit -qam unclosed; hc push -q origin HEAD:main
 hc checkout -q pr; hc rebase -q main; sed -i.b 's/never spend money/spend freely/; s/Never merge/Always merge/' "$h/w/docs/C.md"; rm "$h/w/docs/C.md.b"

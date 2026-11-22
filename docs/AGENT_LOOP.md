@@ -59,7 +59,7 @@ X means a revert won't fully undo it:
 - new dependencies
 - paid-API spend
 - deleting user data
-- this file's merge policy, the grader, the mission guard, agent config (`.claude/`, `CLAUDE.md`, `.mcp.json`), git hooks, CI workflows, the runner and its outcome checks
+- this file's merge policy, the grader, the mission guard, agent config (`.claude/`, `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`), git hooks, CI workflows and actions, the runner and its outcome checks
 - <your own surfaces>
 - a change inside a charter's `mission` markers (`mission-guard pr` on the PR head finds it), or an Order that loosens a hard limit or reaches an X surface
 

@@ -122,13 +122,14 @@ def check():
     return 1 if drift else 2 if unread else 0
 
 
-PROTECTED = (".claude/", ".mcp.json", ".husky/", ".github/workflows/", "scripts/mission-guard",
+PROTECTED = (".mcp.json", ".husky/", ".github/workflows/", ".github/actions/", "scripts/mission-guard",
              "bin/mission-guard", ".mission-guard", "scripts/run.sh", "bin/claude-run", "bin/ops-check", "checks/")
+AGENT_FILES = ("claude.md", "claude.local.md", "agents.md")
 names = lambda out: [f for f in out.split("\0") if f]
 
 
 def checkout():
-    """(repo top, default branch, its merge-base with HEAD, files this checkout changes since that base),
+    """(repo top, default branch, its merge-base with HEAD, tracked files this checkout changes since that base),
     or exit 2: can't tell is X."""
     top = git(".", "rev-parse", "--show-toplevel").stdout.strip()
     branch, why = default_branch(top) if top else (None, "not inside a git checkout")
@@ -136,15 +137,13 @@ def checkout():
     if not base:
         print(f"{why or 'no merge-base with the default branch'}: can't tell, treat the PR as X")
         sys.exit(2)
-    changed = names(git(top, "diff", "-z", "--name-only", "--no-renames", base).stdout) + \
-        names(git(top, "ls-files", "-z", "--others", "--exclude-standard").stdout)
-    return top, branch, base, sorted(set(changed))
+    return top, branch, base, sorted(names(git(top, "diff", "-z", "--name-only", "--no-renames", base).stdout))
 
 
 def pr():
     """Store-free, so it works wherever the PR is checked out, a CI job included. Flags a change since the
-    merge-base to any file's mission blocks, and any change to a protected path: agent config (.claude/,
-    CLAUDE.md, .mcp.json), git hooks, CI workflows, the runner and its checks, the guard itself, and the
+    merge-base to any file's mission blocks, and any change to a protected path: agent config (.claude/ at
+    any depth, CLAUDE.md, CLAUDE.local.md, AGENTS.md, .mcp.json), git hooks, CI workflows and actions, the runner and its checks, the guard itself, and the
     paths listed in `.mission-guard` on the default branch. Exits 1 on a hit (grade X), 2 if it can't
     tell, an unpaired marker included (treat as X), 0 if none."""
     top, branch, base, changed = checkout()
@@ -154,7 +153,8 @@ def pr():
     grep = lambda *ref: names(git(top, "grep", "-lzE", r"^[[:space:]]*<!-- /?mission -->[[:space:]]*$", *ref).stdout)
     charters = set(grep()) | {f.split(":", 1)[1] for f in grep(base)}
     hits = [f"{rel}: a protected path. Grade X." for rel in changed
-            if rel.lower().startswith(protected) or Path(rel).name.lower() == "claude.md"]
+            if rel.lower().startswith(protected) or ".claude" in Path(rel.lower()).parts[:-1]
+            or Path(rel).name.lower() in AGENT_FILES]
     unsure = []
     for rel in sorted(charters & set(changed)):
         f, b = Path(top) / rel, show(base, rel)
