@@ -26,7 +26,7 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader's Bash limit is a hook in its frontmatter, and Claude Code only runs that hook for an agent in your project's `.claude/agents/`.
+It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook, and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
 
 ## Try it in 5 minutes
 
