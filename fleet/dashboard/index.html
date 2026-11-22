@@ -630,7 +630,8 @@ const fcurve = (x1, y1, x2, y2) => { const m = (x1 + x2) / 2; return `M${x1},${y
 dash.draw('factory-count', (e) => {
   const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
   const g = factoryGraph(l.data), n = g.mine.length, gaps = g.ins('nobody').length;
-  e.textContent = n + (n === 1 ? ' loop' : ' loops') + (!n ? '' : gaps ? ' · ' + gaps + ' nobody reads' : ' · every one is read');
+  const lost = g.mine.filter((r) => g.outs(r.loop).some((x) => x.to !== 'nobody') && !g.route(r.loop)).length;
+  e.textContent = n + (n === 1 ? ' loop' : ' loops') + (!n ? '' : !gaps && !lost ? ' · every one reaches you' : (gaps ? ' · ' + gaps + ' nobody reads' : '') + (lost ? ' · ' + lost + ' never reach you' : ''));
 });
 dash.draw('factory', (box) => {
   const l = dash.data('loops');
@@ -702,7 +703,7 @@ dash.draw('factory', (box) => {
     if (!id) return;
     const n = g.nodes.get(id), reads = g.ins(id).map((e) => fname(g.nodes.get(e.from))), by = g.outs(id).map((e) => e.to === 'you' ? 'you' : fname(g.nodes.get(e.to)));
     detail.append(el('b', '', n.kind === 'loop' ? n.row.loop : fname(n)));
-    if (n.kind === 'loop') detail.append(el('p', '', [LABEL[n.row.status], n.row.project || 'General', n.row.last_run && 'last run ' + rel(n.row.last_run)].filter(Boolean).join(' · ')));
+    if (n.kind === 'loop') detail.append(el('p', '', [...new Set([LABEL[n.row.status], n.row.project || 'General'])].concat(n.row.last_run ? ['last run ' + rel(n.row.last_run)] : []).join(' · ')));
     if (n.kind === 'you') { const all = g.chain(id).on.size - 1; detail.append(el('p', '', 'You read ' + reads.length + ' directly and ' + (all - reads.length) + ' more through the loops that check them.')); return; }
     if (n.kind === 'nobody') { detail.append(el('p', '', reads.length + (reads.length === 1 ? ' loop runs' : ' loops run') + ' with no one reading their output: ' + reads.join(', ') + '. Give each a Checked by in the registry.')); return; }
     if (n.kind === 'ext') detail.append(el('p', '', n.service ? 'A service, not a loop: the registry doesn\'t say who reads its output.' : 'Not in the registry, so who reads its output is unknown.'));
@@ -713,21 +714,22 @@ dash.draw('factory', (box) => {
       : path ? 'Read by ' + by.join(', ') + (path.length > 3 ? '. Reaches you through ' + path.slice(1, -1).map((k) => fname(g.nodes.get(k))).join(' → ') : '') + '.'
       : 'Read by ' + by.join(', ') + ', but the chain never reaches you.'));
   };
-  const trace = (id) => {
+  /* pointing only lights a chain; tapping also fills the card, so the page's height never moves under the pointer */
+  const trace = (id, tell) => {
     const c = id ? g.chain(id) : {on: new Set(), via: new Set()};
     box.classList.toggle('trace', !!id);
     chips.forEach((b, k) => { b.classList.toggle('on', c.on.has(k)); b.classList.toggle('sel', k === FX.fsel); b.setAttribute('aria-pressed', String(k === FX.fsel)); });
     paths.forEach((p) => p.classList.toggle('on', c.via.has(+p.dataset.e)));
-    say(id);
+    if (tell) say(id);
   };
   chips.forEach((b, id) => {
     b.onpointerenter = (e) => { if (e.pointerType === 'mouse') trace(id); };
     b.onpointerleave = (e) => { if (e.pointerType === 'mouse') trace(FX.fsel); };
-    b.onclick = (e) => { e.stopPropagation(); FX.fsel = FX.fsel === id ? null : id; trace(FX.fsel); };
+    b.onclick = (e) => { e.stopPropagation(); FX.fsel = FX.fsel === id ? null : id; trace(FX.fsel, true); };
   });
-  box.onclick = () => { FX.fsel = null; trace(null); };
+  box.onclick = () => { FX.fsel = null; trace(null, true); };
   if (!g.nodes.has(FX.fsel)) FX.fsel = null;
-  trace(FX.fsel);
+  trace(FX.fsel, true);
 });
 
 /* waiting tab */
