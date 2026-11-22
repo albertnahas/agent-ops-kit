@@ -96,8 +96,11 @@ def bless(files):
 
 def check():
     """Prints `drift: <path>` (with the diff) or `unreadable: <path>: <why>` per charter.
-    Exits 1 on any drift, else 2 if any charter couldn't be read, else 0."""
+    Exits 1 on any drift, else 2 if any charter couldn't be read or none is recorded, else 0."""
     store, drift, unread = load(), 0, 0
+    if not store:
+        print(f"no charters recorded in {STORE}, so nothing is guarded. Bless each charter.")
+        return 2
     for path, e in store.items():
         text, why = default_text(e["repo"], e["rel"])
         now = why or blocks(text)
@@ -119,57 +122,74 @@ def check():
     return 1 if drift else 2 if unread else 0
 
 
-PROTECTED = (".claude/agents/", ".claude/hooks/", ".claude/settings.json", ".github/workflows/",
-             "scripts/mission-guard", "bin/mission-guard", ".mission-guard")
+PROTECTED = (".claude/", ".mcp.json", ".husky/", ".github/workflows/", "scripts/mission-guard",
+             "bin/mission-guard", ".mission-guard", "scripts/run.sh", "bin/claude-run", "bin/ops-check", "checks/")
+names = lambda out: [f for f in out.split("\0") if f]
 
 
 def checkout():
-    """(repo top, default branch, files this checkout changes against it), or exit 2: can't tell is X."""
+    """(repo top, default branch, its merge-base with HEAD, files this checkout changes since that base),
+    or exit 2: can't tell is X."""
     top = git(".", "rev-parse", "--show-toplevel").stdout.strip()
     branch, why = default_branch(top) if top else (None, "not inside a git checkout")
-    if why:
-        print(f"{why}: can't tell, treat the PR as X")
+    base = git(top, "merge-base", f"origin/{branch}", "HEAD").stdout.strip() if not why else ""
+    if not base:
+        print(f"{why or 'no merge-base with the default branch'}: can't tell, treat the PR as X")
         sys.exit(2)
-    changed = git(top, "diff", "--name-only", "--no-renames", f"origin/{branch}").stdout.split("\n") + \
-        git(top, "ls-files", "--others", "--exclude-standard").stdout.split("\n")
-    return top, branch, sorted(f for f in set(changed) if f)
+    changed = names(git(top, "diff", "-z", "--name-only", "--no-renames", base).stdout) + \
+        names(git(top, "ls-files", "-z", "--others", "--exclude-standard").stdout)
+    return top, branch, base, sorted(set(changed))
 
 
 def pr():
-    """Store-free, so it works wherever the PR is checked out, a CI job included. Flags a change to any
-    file's mission blocks, and any change to a protected path: the grader, hooks, CI workflows, the guard
-    itself, and the paths listed in `.mission-guard` on the default branch. Exits 1 on a hit (grade X),
-    2 if it can't tell (treat as X), 0 if none."""
-    top, branch, changed = checkout()
-    base = lambda rel: git(top, "show", f"origin/{branch}:{rel}")
-    extra = base(".mission-guard").stdout.split() if base(".mission-guard").returncode == 0 else []
-    grep = lambda *ref: git(top, "grep", "-lE", r"^[[:space:]]*<!-- /?mission -->[[:space:]]*$", *ref).stdout.splitlines()
-    charters = set(grep()) | {f.split(":", 1)[1] for f in grep(f"origin/{branch}")}
-    hits = [f"{rel}: a protected path. Grade X." for rel in changed if rel.startswith(PROTECTED + tuple(extra))]
-    for rel in sorted(charters):
-        f, b = Path(top) / rel, base(rel)
-        if (blocks(f.read_text()) if f.is_file() else "deleted") != (blocks(b.stdout) if b.returncode == 0 else "new"):
+    """Store-free, so it works wherever the PR is checked out, a CI job included. Flags a change since the
+    merge-base to any file's mission blocks, and any change to a protected path: agent config (.claude/,
+    CLAUDE.md, .mcp.json), git hooks, CI workflows, the runner and its checks, the guard itself, and the
+    paths listed in `.mission-guard` on the default branch. Exits 1 on a hit (grade X), 2 if it can't
+    tell, an unpaired marker included (treat as X), 0 if none."""
+    top, branch, base, changed = checkout()
+    show = lambda ref, rel: git(top, "show", f"{ref}:{rel}")
+    extra = show(f"origin/{branch}", ".mission-guard")
+    protected = tuple(p.lower() for p in PROTECTED + tuple(extra.stdout.split() if extra.returncode == 0 else ()))
+    grep = lambda *ref: names(git(top, "grep", "-lzE", r"^[[:space:]]*<!-- /?mission -->[[:space:]]*$", *ref).stdout)
+    charters = set(grep()) | {f.split(":", 1)[1] for f in grep(base)}
+    hits = [f"{rel}: a protected path. Grade X." for rel in changed
+            if rel.lower().startswith(protected) or Path(rel).name.lower() == "claude.md"]
+    unsure = []
+    for rel in sorted(charters & set(changed)):
+        f, b = Path(top) / rel, show(base, rel)
+        now, then = blocks(f.read_text()) if f.is_file() else None, blocks(b.stdout) if b.returncode == 0 else None
+        if isinstance(now, str) or isinstance(then, str):
+            unsure.append(f"{rel}: {now if isinstance(now, str) else then}, so its blocks can't be compared. Treat as X.")
+        elif now != then:
             hits.append(f"{rel}: this checkout changes its mission blocks. Grade X.")
-    print("\n".join(hits + [f"{len(hits)} hit(s) across {len(charters)} charter(s) and {len(changed)} changed file(s)"]))
-    return 1 if hits else 0
+    print("\n".join(hits + unsure + [f"{len(hits)} hit(s) across {len(charters)} charter(s) and {len(changed)} changed file(s)"]))
+    return 1 if hits else 2 if unsure else 0
 
 
 def orders():
-    """For a PR that changes Orders: it may change only files under docs/orders/, and each one gains exactly
-    one line under its Changes heading and loses none there. Exits 1 if not, 2 if it can't tell."""
-    top, branch, changed = checkout()
-    log = lambda text: text.split("## Changes", 1)[1].splitlines() if "## Changes" in text else []
+    """For a PR that changes Orders: it may change only files under docs/orders/, each with one `## Changes`
+    heading, and each one gains exactly one dated `date | why | by` line under it and loses none there.
+    Exits 1 if not, 2 if it can't tell."""
+    top, branch, base, changed = checkout()
+    heading = re.compile(r"^## Changes[ \t]*$", re.M)
+    log = lambda text: "".join(heading.split(text, 1)[1:]).splitlines()
     bad = []
     for rel in changed:
         if not re.fullmatch(r"docs/orders/[^/]+\.md", rel):
             bad.append(f"{rel}: not an Orders file")
             continue
-        b, f = git(top, "show", f"origin/{branch}:{rel}"), Path(top) / rel
-        old, new = log(b.stdout if b.returncode == 0 else ""), log(f.read_text() if f.is_file() else "")
+        b, f = git(top, "show", f"{base}:{rel}"), Path(top) / rel
+        text = f.read_text() if f.is_file() else ""
+        if len(heading.findall(text)) != 1:
+            bad.append(f"{rel}: needs exactly one `## Changes` heading")
+            continue
+        old, new = log(b.stdout if b.returncode == 0 else ""), log(text)
         delta = [l for l in difflib.ndiff(old, new) if l[:2] in ("+ ", "- ")]
         added = [l for l in delta if l.startswith("+ ") and l[2:].strip() and l[2:].strip() != "date | why | by"]
-        if any(l.startswith("- ") and l[2:].strip() for l in delta) or len(added) != 1:
-            bad.append(f"{rel}: needs exactly one new Changes line and no removed ones ({len(added)} added)")
+        if any(l.startswith("- ") and l[2:].strip() for l in delta) or len(added) != 1 or \
+                not re.fullmatch(r"\d{4}-\d{2}-\d{2} \|[^|]*\w[^|]*\|[^|]*\w[^|]*\|?", added[0][2:].strip()):
+            bad.append(f"{rel}: needs exactly one new dated `date | why | by` Changes line and no removed ones ({len(added)} added)")
     print("\n".join(bad + [f"{len(changed)} file(s) checked, {len(bad)} problem(s)"]))
     return 1 if bad or not changed else 0
 

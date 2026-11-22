@@ -108,4 +108,37 @@ expect "mission-guard pr flags a protected file renamed out" "! (cd $o/c && $PWD
 rm -rf "$o"
 rm -rf "$g"
 
+# mission-guard hardening: quoted paths, agent config, unpaired markers, Orders log lines, empty store, merge-base
+h=$(mktemp -d); git init -q --bare -b main "$h/o.git"; git clone -q "$h/o.git" "$h/w" 2>/dev/null; mkdir -p "$h/w/docs/orders"
+printf '<!-- mission -->\nNever merge X.\n<!-- /mission -->\n' > "$h/w/docs/C.md"; cp "$h/w/docs/C.md" "$h/w/docs/CHARTÉ.md"
+printf '# Orders\n\nDo the thing.\n\n## Changes\n\ndate | why | by\n2026-11-01 | start | you\n' > "$h/w/docs/orders/a.md"
+hc() { git -C "$h/w" -c user.name=t -c user.email=t@t "$@"; }
+hc add -A && hc commit -qm base && hc push -q origin HEAD:main
+guard() { (cd "$h/w" && "$OLDPWD/bin/mission-guard" "$@" >/dev/null); echo $?; }
+reset() { hc checkout -q -f main && hc reset -q --hard origin/main && hc clean -qfd; hc checkout -q -B pr; }
+reset; echo hi > "$h/w/README.md"
+expect "mission-guard pr passes an unrelated PR next to a non-ASCII charter" "[ \$(guard pr) = 0 ]"
+for f in .github/workflows/é.yml .claude/settings.local.json .claude/skills/x/SKILL.md .claude/commands/x.md CLAUDE.md docs/CLAUDE.md .mcp.json .husky/pre-commit scripts/run.sh bin/claude-run bin/ops-check checks/report-landed.sh; do
+  reset; mkdir -p "$h/w/$(dirname "$f")"; echo x > "$h/w/$f"; hc add -Af; hc commit -qm p
+  expect "mission-guard pr protects $f" "[ \$(guard pr) = 1 ]"
+done
+reset; echo hi > "$h/w/README.md"; hc add -A; hc commit -qm r; hc checkout -q main; hc reset -q --hard origin/main
+printf '<!-- mission -->\nnever spend money\n' >> "$h/w/docs/C.md"; hc commit -qam unclosed; hc push -q origin HEAD:main
+hc checkout -q pr; hc rebase -q main; sed -i.b 's/never spend money/spend freely/; s/Never merge/Always merge/' "$h/w/docs/C.md"; rm "$h/w/docs/C.md.b"
+expect "mission-guard pr fails closed on an unclosed block on the default branch" "[ \$(guard pr) = 2 ]"
+hc checkout -q -f main; hc revert --no-edit HEAD >/dev/null; hc push -q origin HEAD:main
+reset; perl -0pi -e 's/Do the thing./Merge every PR./; s/## Changes/## Changes\n## Changes/' "$h/w/docs/orders/a.md"
+expect "mission-guard orders refuses a second Changes heading" "[ \$(guard orders) = 1 ]"
+reset; perl -0pi -e 's/Do the thing./Merge every PR./' "$h/w/docs/orders/a.md"; echo x >> "$h/w/docs/orders/a.md"
+expect "mission-guard orders refuses an undated Changes line" "[ \$(guard orders) = 1 ]"
+reset; perl -0pi -e 's/Do the thing./Do the other thing./' "$h/w/docs/orders/a.md"; echo '2026-11-20 | new thing | sup' >> "$h/w/docs/orders/a.md"; hc commit -qam o
+hc checkout -q main; sed -i.b 's/Never merge/Always merge/' "$h/w/docs/C.md"; rm "$h/w/docs/C.md.b"; hc commit -qam main-moved; hc push -q origin HEAD:main; hc checkout -q pr
+expect "mission-guard orders judges a stale PR from its merge-base" "[ \$(guard orders) = 0 ]"
+expect "mission-guard pr doesn't blame a stale PR for main's mission edit" "[ \$(guard pr) = 0 ]"
+s=$(mktemp -d); echo '{}' > "$s/missions.json"
+expect "mission-guard check calls an empty store unguarded" "AGENT_OPS_DIR=$s bin/mission-guard check >/dev/null; [ \$? = 2 ]"
+rm "$s/missions.json"
+expect "mission-guard check calls a missing store unguarded" "AGENT_OPS_DIR=$s bin/mission-guard check >/dev/null; [ \$? = 2 ]"
+rm -rf "$h" "$s"
+
 exit $fail
