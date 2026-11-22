@@ -23,6 +23,9 @@ printf 'not json\n{}\n' >> "$AGENT_OPS_DIR/runs.jsonl"
 stub="$AGENT_OPS_DIR/stub"; mkdir "$stub"; printf '#!/bin/sh\necho auth failed >&2; exit 1\n' > "$stub/claude"; chmod +x "$stub/claude"
 PATH="$stub:$PATH" OPS_LOOP=crashed bin/claude-run -p hi >/dev/null 2>&1
 expect "claude-run logs a run that printed nothing" "grep -q '\"loop\":\"crashed\".*\"subtype\":\"no_json\"' $AGENT_OPS_DIR/runs.jsonl"
+printf '#!/bin/sh\necho %s\n' "'{\"subtype\":\"success\",\"is_error\":true,\"permission_denials\":[{},{}],\"num_turns\":1,\"total_cost_usd\":0.1,\"usage\":{\"input_tokens\":1,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0,\"output_tokens\":1}}'" > "$stub/claude"
+PATH="$stub:$PATH" OPS_LOOP=denied bin/claude-run -p hi >/dev/null 2>&1
+expect "claude-run logs is_error and the denied calls" "grep '\"loop\":\"denied\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.is_error == true and .denials == 2' >/dev/null"
 
 out=$(bin/heartbeat.py | tail -1)
 expect "heartbeat flags the failed check" "jq -e '.alerts | any(startswith(\"check:broken\"))' <<<'$out' >/dev/null"
