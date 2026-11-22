@@ -131,5 +131,12 @@ git -C "$o/c" mv .github/workflows/ci.yml .github/ci.yml
 expect "mission-guard pr flags a protected file renamed out" "! (cd $o/c && $PWD/bin/mission-guard pr >/dev/null)"
 rm -rf "$o"
 rm -rf "$g"
+a=$(mktemp -d); mkdir "$a/bin"
+printf '#!/bin/sh\ncase "$*" in "pr view"*) echo "$GH_LOGIN";; *permission*) [ -n "$GH_PERM" ] && echo "$GH_PERM" || exit 1;; esac\n' > "$a/bin/gh"; chmod +x "$a/bin/gh"
+gate() { PATH="$a/bin:$PATH" GH_LOGIN=$1 GH_PERM=$2 bin/mission-guard author 7 >/dev/null; echo $?; }
+expect "mission-guard author passes a collaborator who can push" "[ \$(gate me write) = 0 ]"
+expect "mission-guard author makes a read-only stranger X" "[ \$(gate stranger read) = 1 ]"
+expect "mission-guard author fails closed when it can't read access" "[ \$(gate me '') = 2 ]"
+rm -rf "$a"
 
 exit $fail
