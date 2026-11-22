@@ -11,9 +11,10 @@ echo "{\"launch_agents\": \"$AGENT_OPS_DIR/none\", \"refresh\": \"Demo data\"}" 
 # Most loops are cloud routines; two are desktop-app tasks, and one is a launchd job, which shows as paused (not loaded here).
 runtime() { case $1 in fleet-sync|life-review) echo app;; app-beta) echo mac;; *) echo cloud;; esac; }
 job() { case $(runtime "$1") in app) echo "task:$1";; mac) echo "com.demo.$1";; *) echo "routine:$1";; esac; }
-# Supervisors write their children's Orders: each daily ops loop runs its project; one row names a loop that doesn't exist.
-supervisor() { case $1 in shop-daily-ops|blog-daily-ops|app-daily-ops) echo you;; shop-*) echo shop-daily-ops;; blog-writer|blog-editor|blog-seo) echo blog-daily-ops;;
-  blog-links) echo blog-chief;; app-crash-triage|app-reviews|app-store-watch|app-release-notes) echo app-daily-ops;; *) echo you;; esac; }
+# Supervisors write their children's Orders: each daily ops loop runs its project, one row names a loop that doesn't
+# exist, and the rest have none.
+supervisor() { case $1 in *-daily-ops) ;; shop-*) echo shop-daily-ops;; blog-writer|blog-editor|blog-seo) echo blog-daily-ops;;
+  blog-links) echo blog-chief;; app-crash-triage|app-reviews|app-store-watch|app-release-notes) echo app-daily-ops;; esac; }
 day() { date -v-"$1"d +%FT0"$2":00:00 2>/dev/null || date -d "$1 days ago" +%FT0"$2":00:00; }
 
 loops=(
