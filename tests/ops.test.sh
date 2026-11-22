@@ -23,6 +23,18 @@ printf 'not json\n{}\n' >> "$AGENT_OPS_DIR/runs.jsonl"
 stub="$AGENT_OPS_DIR/stub"; mkdir "$stub"; printf '#!/bin/sh\necho auth failed >&2; exit 1\n' > "$stub/claude"; chmod +x "$stub/claude"
 PATH="$stub:$PATH" OPS_LOOP=crashed bin/claude-run -p hi >/dev/null 2>&1
 expect "claude-run logs a run that printed nothing" "grep -q '\"loop\":\"crashed\".*\"subtype\":\"no_json\"' $AGENT_OPS_DIR/runs.jsonl"
+printf '#!/bin/sh\necho '"'"'{"result":"limit","subtype":"success","is_error":true,"permission_denials":[{},{}],"session_id":"s-1","num_turns":1,"total_cost_usd":0,"usage":{"input_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":1}}'"'"'; exit 1\n' > "$stub/claude"
+PATH="$stub:$PATH" OPS_LOOP=limited bin/claude-run -p hi >/dev/null 2>&1
+expect "claude-run logs is_error, the denial count and the session id" "grep '\"loop\":\"limited\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.is_error == true and .denials == 2 and .session == \"s-1\" and .exit == 1' >/dev/null"
+expect "ops-check fails a passing check after a crashed Claude run, and says so" "! bin/ops-check -l limited -- echo report ok >/dev/null && grep '\"loop\":\"limited\"' $AGENT_OPS_DIR/runs.jsonl | tail -1 | jq -e '.check == \"fail\" and (.detail | test(\"claude run at .* crashed \\\\(exit 1\\\\)\"))' >/dev/null"
+bin/ops-check -l limited -- echo report ok >/dev/null
+expect "a check's own line ends the crash: the next check can pass" "bin/ops-check -l limited -- true >/dev/null"
+echo "{\"loop\":\"flagged\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"exit\":0,\"is_error\":true}" >> "$AGENT_OPS_DIR/runs.jsonl"
+expect "a run that exited 0 with is_error also fails the check" "! bin/ops-check -l flagged -- true >/dev/null"
+echo "{\"loop\":\"fine\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"exit\":0,\"is_error\":false}" >> "$AGENT_OPS_DIR/runs.jsonl"
+expect "a healthy Claude run leaves the check alone" "bin/ops-check -l fine -- true >/dev/null"
+expect "the loop name falls back to the folder when the launchd label is 0 or unset" "XPC_SERVICE_NAME=0 bin/ops-check -- true >/dev/null; tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"$(basename "$PWD")\"'"
+expect "OPS_LOOP wins over the launchd label" "OPS_LOOP=mine XPC_SERVICE_NAME=com.x.job bin/ops-check -- true >/dev/null; tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"mine\"'"
 
 out=$(bin/heartbeat.py | tail -1)
 expect "heartbeat flags the failed check" "jq -e '.alerts | any(startswith(\"check:broken\"))' <<<'$out' >/dev/null"

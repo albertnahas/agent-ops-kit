@@ -12,7 +12,7 @@ Writes, refusing to overwrite any of them:
   $AGENT_OPS_DIR/checks/NAME.py   the outcome check, from templates/new-loop/check.py
   $AGENT_OPS_DIR/runners/NAME.sh  the runner (launchd and cron), exporting OPS_LOOP with cost caps
   $AGENT_OPS_DIR/schedules/...    a launchd plist, a crontab line, or a routine or app task prompt, not installed
-  $AGENT_OPS_DIR/REGISTRY.md      one new row
+  $AGENT_OPS_REGISTRY             one new row (default $AGENT_OPS_DIR/REGISTRY.md)
 and copies into REPO whatever the charter relies on that it lacks: the grader, the hooks, claude-run,
 ops-check, scripts/mission-guard and docs/DECISIONS.md. Text for mission blocks is the user's, verbatim.
 It commits, pushes, blesses and schedules nothing: it prints those steps.
@@ -27,6 +27,7 @@ KIT = Path(__file__).resolve().parent.parent
 TEMPLATES = KIT / "templates/new-loop"
 SPEC = json.loads((KIT / "skills/new-loop/questions.json").read_text())
 OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops")).expanduser()
+REGISTRY = Path(os.environ.get("AGENT_OPS_REGISTRY", OPS / "REGISTRY.md")).expanduser()
 INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "bin/claude-run",
            "bin/ops-check": "bin/ops-check", "bin/mission-guard": "scripts/mission-guard",
            "docs/DECISIONS.md": "docs/DECISIONS.md",
@@ -155,7 +156,7 @@ def registry_row(a, charter):
 
 def registry(name):
     """The registry's path, text, Registry table match and the loop's row match (or None)."""
-    path = OPS / "REGISTRY.md"
+    path = REGISTRY
     text = path.read_text() if path.exists() else (TEMPLATES / "REGISTRY.md").read_text()
     head = re.search(r"^## Registry\n(?:.*\n)*?\|---.*\n(?:\|.*\n)*", text, re.M)
     if not head:
@@ -170,6 +171,7 @@ def register(a, charter):
     if not a.reschedule:
         if row:
             sys.exit(f"{path} already has a row for {a.name}")
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text[:head.end()] + registry_row(a, charter) + "\n" + text[head.end():])
         return
     cells = re.split(r"(?<!\\)\|", row.group(0).strip("|"))
@@ -245,7 +247,7 @@ def reschedule(a, charter):
         text = path.read_text()
         path.write_text(re.sub(HARD_STOP, lambda m: RUNTIMES[a.runtime]["stop"].format(name=a.name) + ".", text, count=1, flags=re.M))
         steps.insert(0, f"Land {charter}'s new kill switch as a founder PR (it's a mission block), then bless it again")
-    print("\n".join([f"wrote {f}" for f in files] + [f"updated {a.name} in {OPS / 'REGISTRY.md'}", "", "Next:"] +
+    print("\n".join([f"wrote {f}" for f in files] + [f"updated {a.name} in {REGISTRY}", "", "Next:"] +
                     [f"{i}. {t}" for i, t in enumerate(steps, 1)]))
 
 
@@ -281,7 +283,7 @@ def main():
     kept = [] if "guard-bash.sh" in (a.repo / ".claude/settings.json").read_text() else [
         f"kept {a.repo}/.claude/settings.json: merge the kit's PreToolUse guard hook and deny rules into it by hand, or the guard isn't wired"]
     print("\n".join([f"wrote {f}" for f in files] + [f"copied {d} into {a.repo}" for d in copied] + kept +
-          [f"added {a.name} to {OPS / 'REGISTRY.md'}", "", "Next:",
+          [f"added {a.name} to {REGISTRY}", "", "Next:",
           f"1. Dry run the check: python3 {sh(check)}",
           f"2. Land the repo files on the default branch through a PR: {', '.join(mine + copied)}",
           f"3. Bless at your own terminal: cd {sh(a.repo)} && scripts/mission-guard bless {' '.join(guarded)}",
