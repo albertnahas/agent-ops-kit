@@ -134,7 +134,7 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
 .fx-fnode { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 5px 6px; border-radius: 7px; cursor: pointer;
   font-size: var(--cds-font-size-caption); line-height: 1.25; background: var(--color-bg); border: 1px solid var(--color-border-line); box-shadow: 0 1px 2px rgb(0 0 0 / .06);
   transition: opacity 160ms, border-color 160ms, box-shadow 160ms; }
-.fx-fnode > span:not(.fx-dot) { min-width: 0; overflow: hidden; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.fx-fnode > span:not(.fx-dot) { min-width: 0; overflow: hidden; overflow-wrap: break-word; }
 .fx-fnode .fx-dot { flex: none; width: 8px; height: 8px; }
 .fx-fnode b { margin-left: auto; padding-left: 4px; font-weight: 600; font-size: 11px; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
 .fx-fnode:hover, .fx-fnode:focus-visible { border-color: color-mix(in srgb, var(--color-fg) 45%, transparent); outline: none; }
@@ -587,7 +587,7 @@ const factoryGraph = (rows) => {
   loops.forEach((r) => {
     const to = (r.checked_by || []).filter((c) => c !== r.loop);
     (to.length ? to : ['nobody']).forEach((c) => {
-      if (!nodes.has(c)) nodes.set(c, {id: c, kind: ['you', 'nobody'].includes(c) ? c : 'ext'});
+      if (!nodes.has(c)) nodes.set(c, {id: c, kind: ['you', 'nobody'].includes(c) ? c : 'ext', service: rows.some((x) => x.loop === c && x.project === 'Service')});
       edges.push({from: r.loop, to: c, i: edges.length});
     });
   });
@@ -630,7 +630,7 @@ const fcurve = (x1, y1, x2, y2) => { const m = (x1 + x2) / 2; return `M${x1},${y
 dash.draw('factory-count', (e) => {
   const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
   const g = factoryGraph(l.data), n = g.mine.length, gaps = g.ins('nobody').length;
-  e.textContent = n + (n === 1 ? ' loop' : ' loops') + ' · ' + (gaps ? gaps + ' nobody reads' : 'every one is read');
+  e.textContent = n + (n === 1 ? ' loop' : ' loops') + (!n ? '' : gaps ? ' · ' + gaps + ' nobody reads' : ' · every one is read');
 });
 dash.draw('factory', (box) => {
   const l = dash.data('loops');
@@ -649,7 +649,7 @@ dash.draw('factory', (box) => {
     b.append(el('span', '', fname(n)));
     if (rt) b.append(rt);
     if (read) b.append(el('b', '', String(read)));
-    b.setAttribute('aria-label', fname(n) + (n.kind === 'loop' ? ', ' + LABEL[n.row.status] + (rt ? ', ' + runtimeOf(n.row)[1] : '') : n.kind === 'ext' ? ', not in the registry' : '')
+    b.setAttribute('aria-label', fname(n) + (n.kind === 'loop' ? ', ' + LABEL[n.row.status] + (rt ? ', ' + runtimeOf(n.row)[1] : '') : n.kind === 'ext' ? (n.service ? ', a service' : ', not in the registry') : '')
       + (read ? ', reads ' + read : '') + (gap ? ', nobody reads it' : ''));
     chips.set(n.id, b);
     return b;
@@ -705,11 +705,11 @@ dash.draw('factory', (box) => {
     if (n.kind === 'loop') detail.append(el('p', '', [LABEL[n.row.status], n.row.project || 'General', n.row.last_run && 'last run ' + rel(n.row.last_run)].filter(Boolean).join(' · ')));
     if (n.kind === 'you') { const all = g.chain(id).on.size - 1; detail.append(el('p', '', 'You read ' + reads.length + ' directly and ' + (all - reads.length) + ' more through the loops that check them.')); return; }
     if (n.kind === 'nobody') { detail.append(el('p', '', reads.length + (reads.length === 1 ? ' loop runs' : ' loops run') + ' with no one reading their output: ' + reads.join(', ') + '. Give each a Checked by in the registry.')); return; }
-    if (n.kind === 'ext') detail.append(el('p', '', 'Not in the registry, so who reads its output is unknown.'));
+    if (n.kind === 'ext') detail.append(el('p', '', n.service ? 'A service, not a loop: the registry doesn\'t say who reads its output.' : 'Not in the registry, so who reads its output is unknown.'));
     if (reads.length) detail.append(el('p', '', 'Reads ' + reads.join(', ') + '.'));
     if (n.kind !== 'loop') return;
     const path = g.route(id);
-    detail.append(el('p', '', g.outs(id).some((e) => e.to === 'nobody') ? 'Nobody reads its output.'
+    detail.append(el('p', '', g.outs(id).every((e) => e.to === 'nobody') ? 'Nobody reads its output.'
       : path ? 'Read by ' + by.join(', ') + (path.length > 3 ? '. Reaches you through ' + path.slice(1, -1).map((k) => fname(g.nodes.get(k))).join(' → ') : '') + '.'
       : 'Read by ' + by.join(', ') + ', but the chain never reaches you.'));
   };
