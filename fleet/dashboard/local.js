@@ -19,7 +19,11 @@
       border: 1px solid var(--color-border-line); border-radius: 6px; padding: 5px 8px; }`;
   document.head.append(css);
 
-  const datasets = {}, calcs = {}, draws = {};
+  const datasets = {}, calcs = {}, draws = {}, widths = new WeakMap();
+  /* as on claude.ai, a drawing runs again when its element's width changes, opening a hidden tab included */
+  const resized = new ResizeObserver((entries) => requestAnimationFrame(() => entries.forEach(({target: e}) => {
+    if (widths.get(e) !== e.clientWidth) { widths.set(e, e.clientWidth); draws[e.dataset.draw](e); }
+  })));
   for (const id of ['loops', 'waiting']) {
     const d = window.FLEET[id];
     datasets[id] = {status: 'ok', data: d.rows, meta: d.meta, columns: Object.keys(d.rows[0] || {})};
@@ -38,7 +42,10 @@
     calc(id, spec) { calcs[id] = {...spec}; },
     draw(name, fn) {
       if (fn) draws[name] = fn;
-      document.querySelectorAll(`[data-draw="${name}"]`).forEach((e) => draws[name] && draws[name](e));
+      document.querySelectorAll(`[data-draw="${name}"]`).forEach((e) => {
+        if (!draws[name]) return;
+        draws[name](e); widths.set(e, e.clientWidth); resized.observe(e);
+      });
     },
     params() { return {...params}; },
     setParams(v) { params = {...params, ...v}; rerun(); },
