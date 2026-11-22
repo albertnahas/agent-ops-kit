@@ -34,6 +34,7 @@ expect "the Good block is filled and the Floor is the user's" "grep -q '^## Good
 expect "the kill switch names the launchd job" "grep -q 'launchctl bootout gui/\$(id -u)/com.agent-ops.triage' $c"
 expect "reports go to the loop's own folder" "grep -q 'docs/ops-reports/triage/' $c && ! grep -q 'docs/ops-reports/YYYY' $c"
 expect "the Orders file names the loop, keeps no example Orders and logs one line" "grep -q '^# Orders: triage' docs/orders/triage.md && ! grep -q wedding docs/orders/triage.md && [ \$(grep -c '| new-loop |\| from new-loop |' docs/orders/triage.md) = 1 ]"
+expect "the charter links its Orders, whose Target starts at the Floor" "grep -q 'docs/orders/triage.md' $c && grep -q '^Target: at least 1 commit ' docs/orders/triage.md"
 expect "the runner exports OPS_LOOP with cost caps" "grep -q '^export OPS_LOOP=triage' $AGENT_OPS_DIR/runners/triage.sh && grep -q 'max-budget-usd 5' $AGENT_OPS_DIR/runners/triage.sh && grep -q 'max-turns 60' $AGENT_OPS_DIR/runners/triage.sh"
 expect "the plist runs the runner at 02:00 and isn't installed" "python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],\"rb\")); assert p[\"StartCalendarInterval\"]=={\"Hour\":2,\"Minute\":0} and p[\"ProgramArguments\"]==[sys.argv[2]]' $AGENT_OPS_DIR/schedules/com.agent-ops.triage.plist $AGENT_OPS_DIR/runners/triage.sh && [ ! -e $HOME/Library/LaunchAgents ]"
 expect "the registry gets one row with its check and reader" "grep -q '^| triage | App | mac | com.agent-ops.triage | 0 2 \* \* \* | \`docs/loops/triage.md\` | .*checks/triage.py.* | you |' $AGENT_OPS_DIR/REGISTRY.md"
@@ -46,6 +47,8 @@ tty "$(for f in $guarded; do printf '%s ' "${f##*/}"; done | sed 's/ $//')" "$ki
 expect "mission-guard blesses the charter and finds it clean" "out=\$($kit/bin/mission-guard check); [ \$? = 0 ] && grep -q \"^\$(wc -w <<<\"\$guarded\" | tr -d ' ') of \" <<<\"\$out\""
 git checkout -q -b lower && sed -i.bak 's/at least 1 commit$/at least 0 commits/' $c && rm $c.bak && git commit -qam lower
 expect "mission-guard pr makes a Floor edit X" "! $kit/bin/mission-guard pr >/dev/null"
+git checkout -q trunk && git checkout -q -b orders && echo "$(date +%F) | first review | you" >> docs/orders/triage.md && git commit -qam orders
+expect "mission-guard orders passes the scaffolded Orders with one appended line" "$kit/bin/mission-guard orders >/dev/null"
 git checkout -q trunk
 
 check="$kit/bin/ops-check -- python3 $AGENT_OPS_DIR/checks/triage.py"
@@ -61,8 +64,9 @@ out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "a
 expect "new-loop scaffolds a cron loop next to the first" "[ \$? = 0 ] && grep -q '^30 6 \* \* 1-5 PATH=.* AGENT_OPS_DIR=.*runners/growth.sh' $AGENT_OPS_DIR/schedules/growth.cron"
 report growth && land growth
 expect "a check fails when the Floor's number isn't met" "! python3 $AGENT_OPS_DIR/checks/growth.py > $s/growth.out && grep -q 'is not at least the Floor of 1000' $s/growth.out"
-out=$(scaffold --name weekly --runtime cloud --schedule "0 9 * * 1" --floor "unmeasured: no issue data yet" --checked-by triage 2>&1)
+out=$(scaffold --name weekly --runtime cloud --schedule "0 9 * * 1" --floor "unmeasured: no issue data yet" --supervisor triage 2>&1)
 expect "new-loop writes a cloud routine prompt that points at the charter" "[ \$? = 0 ] && grep -q 'Read docs/loops/weekly.md and run it' $AGENT_OPS_DIR/schedules/weekly.routine.md && [ ! -e $AGENT_OPS_DIR/runners/weekly.sh ]"
+expect "a supervised loop is checked by its supervisor" "grep -q '^| weekly |  | cloud | routine:weekly | .* | triage | triage |  |  |\$' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^Supervisor: triage, Mondays' docs/orders/weekly.md"
 expect "launchd refuses a schedule it can't express" "! scaffold --name ranged --runtime launchd --schedule '0 9 * * 1-5' --floor 'unmeasured: x' >/dev/null 2>&1"
 expect "the registry holds all three loops" "[ \$(grep -cE '^\| (triage|growth|weekly) \|' $AGENT_OPS_DIR/REGISTRY.md) = 3 ]"
 expect "nothing was installed with launchctl or crontab" "[ ! -e $s/scheduled ]"

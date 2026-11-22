@@ -41,7 +41,7 @@ def args():
     p.add_argument("--measure", default="")
     p.add_argument("--x-surface", action="append", default=[])
     p.add_argument("--project", default="")
-    p.add_argument("--checked-by", default="you")
+    p.add_argument("--checked-by", help="who reads its output: default its supervisor, else you")
     p.add_argument("--supervisor", default="")
     p.add_argument("--escalates-to", default="")
     p.add_argument("--role", default="", choices=("", "master", "manager"))
@@ -49,6 +49,7 @@ def args():
     p.add_argument("--turns", type=int, default=60)
     a = p.parse_args()
     a.repo = Path(a.repo).expanduser().resolve()
+    a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
         p.error("--name is letters, digits, _ . and -, and not you or nobody")
     if re.match(LEVEL, a.floor, re.I) and not a.measure:
@@ -107,7 +108,9 @@ def orders(template, a):
     who = f"{a.supervisor}, Mondays" if a.supervisor else "you"
     text = re.sub(r"^# Orders: .*$", f"# Orders: {a.name}", template, count=1, flags=re.M)
     text = re.sub(r"^Supervisor: [^.]*", f"Supervisor: {who}", text, count=1, flags=re.M)
-    text = re.sub(r"^Target: .*$", f"Target: {a.floor} (the charter's Floor; a Target may only raise it)", text, count=1, flags=re.M)
+    target = f"Target: {a.floor} (the charter's Floor; a Target may only raise it)"
+    text = re.sub(r"^Target: .*$", target, text, count=1, flags=re.M) if re.search(r"^Target: ", text, re.M) \
+        else text.replace("| Order |", f"{target}\n\n| Order |", 1)  # #22's line, for a template that predates it
     text = re.sub(r"(\|---.*\n)(\|.*\n)+", r"\1", text, count=1)
     return text.split("date | why | by")[0] + f"date | why | by\n{dt.date.today()} | first Orders, from new-loop | you\n"
 
@@ -156,7 +159,7 @@ def main():
     else:
         files[runner] = (TEMPLATES / "run.sh").read_text()
         for k, v in {"name": a.name, "repo": sh(a.repo), "charter": sh(charter.relative_to(a.repo)), "check": sh(check),
-                     "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
+                     "log": sh(OPS / f"logs/{a.name}.log"),                      "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
             files[runner] = files[runner].replace("{{%s}}" % k, v)
         path = ":".join(dict.fromkeys([str(Path(w).parent) for t in ("claude", "gh", "jq", "python3", "git")
                                        for w in [shutil.which(t)] if w] + ["/usr/bin", "/bin"]))  # cron and launchd start bare

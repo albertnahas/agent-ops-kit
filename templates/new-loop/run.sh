@@ -5,8 +5,8 @@
 set -uo pipefail
 cd {{repo}} || exit 1
 export OPS_LOOP={{name}}
-charter={{charter}} log=logs/{{name}}.log
-mkdir -p logs
+charter={{charter}} log={{log}}
+mkdir -p "$(dirname "$log")"
 
 if ! grep -q '^status: active' "$charter"; then
   echo "$(date +%FT%T%z) paused by charter, not starting" >> "$log"

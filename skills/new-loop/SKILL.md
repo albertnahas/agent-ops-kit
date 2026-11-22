@@ -1,6 +1,6 @@
 ---
 name: new-loop
-description: Set up one scheduled Claude Code loop in the user's repo the agent-ops-kit way, from a few questions: a charter with a locked Mission and Good block, an outcome check written before the prompt, a runner with cost caps, a schedule file and a registry row. Use when the user wants to start a loop, put a repo on a nightly agent, schedule Claude Code to work on a project, or says "/new-loop". Not for planning which loops a project needs (that's the factory's plan-loops) or checking loops already running.
+description: Set up one scheduled Claude Code loop in the user's repo the agent-ops-kit way, from a few questions. It writes a charter with a locked Mission and Good block, an outcome check written before the prompt, a runner with cost caps, a schedule file and a registry row. Use when the user wants to start a loop, put a repo on a nightly agent, schedule Claude Code to work on a project, or runs /agent-ops-kit:new-loop. Not for planning which loops a project needs (that's the factory's plan-loops) or checking loops already running.
 ---
 
 # New loop
@@ -43,7 +43,7 @@ Run the check exactly as `new-loop` printed (`python3 <check>`, not through `ops
 
 1. **Land** the repo files it listed through a PR, with the user's yes. A charter changes only through a PR.
 2. **Bless**, after the merge. Bless locks the mission blocks as the user's, so the user runs it themselves at their own terminal. Give them the exact line `new-loop` printed and wait. Never run it for them.
-3. **Run it once by hand** with the runner (or the routine's Run now). Read its log in `logs/<name>.log` and the two ledger lines in `$AGENT_OPS_DIR/runs.jsonl`: the run's cost and the check's pass or fail.
+3. **Run it once by hand** with the runner (or the routine's Run now). Read its log in `$AGENT_OPS_DIR/logs/<name>.log` and the two ledger lines in `$AGENT_OPS_DIR/runs.jsonl`: the run's cost and the check's pass or fail.
 4. **Schedule** with the printed command, on the user's yes. Then schedule the heartbeat (`heartbeat.py`, every morning) if nothing runs it yet, and set `AGENT_OPS_NOTIFY` so its alerts reach them.
 
 If the repo has no grade labels yet: `for l in founder grade:A grade:B grade:C grade:X; do gh label create "$l"; done`.

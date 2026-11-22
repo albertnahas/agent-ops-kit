@@ -28,7 +28,7 @@ You need Claude Code v2.1.295 or later, `gh`, `jq` and `python3`. Install the pl
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-Then, in the repo you want a loop on, run `/new-loop`. It asks four things: what the loop should achieve, how you'd know it worked as a number it doesn't write, what it must never do, and when and where it runs (launchd, cron or a cloud routine). Then `bin/new-loop` writes the loop the same way every time:
+Then, in the repo you want a loop on, run `/agent-ops-kit:new-loop`, or just ask Claude Code for a new loop. It asks four things: what the loop should achieve, how you'd know it worked as a number it doesn't write, what it must never do, and when and where it runs (launchd, cron or a cloud routine). Then `bin/new-loop` writes the loop the same way every time:
 
 - the charter in `docs/loops/<name>.md`, with your words in its Mission, Good block, hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
 - the outcome check in `$AGENT_OPS_DIR/checks/<name>.py`, written before the loop's first prompt: today's report landed, and the number in your Floor holds;
