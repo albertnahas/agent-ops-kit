@@ -44,6 +44,13 @@ bin/ops-check -l crlf -- printf 'good: 5 higher 3 \r\n' >/dev/null
 bin/ops-check -l malformed -- sh -c 'echo good: 1.2.3 higher; echo good: . lower' >/dev/null
 expect "ops-check reads a Good line with CRLF or trailing blanks" "grep '\"loop\":\"crlf\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.value == 5 and .bar == 3' >/dev/null"
 expect "a malformed Good line is ignored and the check is still logged" "grep '\"loop\":\"malformed\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.check == \"pass\" and (has(\"value\") | not)' >/dev/null"
+bin/ops-check -l fresh -- echo good: 49 total >/dev/null
+echo "{\"loop\":\"grown\",\"date\":\"$(day 9)\",\"check\":\"pass\",\"total\":40}" >> $AGENT_OPS_DIR/runs.jsonl
+echo "{\"loop\":\"grown\",\"date\":\"$(day 8)\",\"check\":\"pass\",\"total\":44}" >> $AGENT_OPS_DIR/runs.jsonl
+echo "{\"loop\":\"grown\",\"date\":\"$(day 2)\",\"check\":\"pass\",\"total\":47}" >> $AGENT_OPS_DIR/runs.jsonl
+bin/ops-check -l grown -- echo good: 49 total 3 >/dev/null
+expect "a running total is recorded, with no gain before it has a week of history" "grep '\"loop\":\"fresh\"' $AGENT_OPS_DIR/runs.jsonl | jq -e '.total == 49 and (has(\"value\") | not)' >/dev/null"
+expect "a running total's value is its gain since the last total a week or more before" "grep '\"loop\":\"grown\"' $AGENT_OPS_DIR/runs.jsonl | tail -1 | jq -e '.total == 49 and .value == 5 and .better == \"higher\" and .bar == 3' >/dev/null"
 expect "ops-check with no command is a usage error, not a pass" "! bin/ops-check -l empty -- 2>/dev/null && ! grep -q '\"loop\":\"empty\"' $AGENT_OPS_DIR/runs.jsonl"
 
 # the watchman survives any ledger: bad bytes, a cut last line, odd field types, Z and offset dates, a future date
