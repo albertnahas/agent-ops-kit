@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Outcome check for the {{name}} loop, written by new-loop before its first run. No model, free.
 Passes only when today's report landed on origin with every section, and, once the Floor is measured,
-the Good block's number, read from its Source and never from anything the loop writes, is on the right
+the Floor's number, read from its Source and never from anything the loop writes, is on the right
 side of the Floor. Run it through ops-check so the result lands in the ledger:
   ops-check -l {{name}} -- python3 <this file> [YYYY-MM-DD]"""
 import datetime as dt, re, subprocess, sys

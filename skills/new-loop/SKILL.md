@@ -1,6 +1,6 @@
 ---
 name: new-loop
-description: Set up one scheduled Claude Code loop in the user's repo the agent-ops-kit way, from a few questions, or change one it already set up (`edit <loop>`). It writes a charter with a locked Mission and Good block, an outcome check written before the prompt, a runner with cost caps, a schedule file and a registry row. Use when the user wants to start a loop, put a repo on a nightly agent, schedule Claude Code to work on a project, or runs /agent-ops-kit:new-loop. Not for planning which loops a project needs (that's the factory's plan-loops) or checking loops already running.
+description: Set up one scheduled Claude Code loop in the user's repo the agent-ops-kit way, from a few questions, or change one it already set up (`edit <loop>`). It writes a charter with a locked Mission holding its Floor and Source, an outcome check written before the prompt, a runner with cost caps, a schedule file and a registry row. Use when the user wants to start a loop, put a repo on a nightly agent, schedule Claude Code to work on a project, or runs /agent-ops-kit:new-loop. Not for planning which loops a project needs (that's the factory's plan-loops) or checking loops already running.
 ---
 
 # New loop
@@ -46,8 +46,8 @@ Report the loop's name, what each run cost by hand, its first scheduled run, and
 
 `edit <loop>` asks the spec's `edit` questions, then takes the route its `change` choice names. Read the loop's charter, Orders and registry row first, and show the user the exact change before making it.
 
-- **orders:** an Orders PR of its own. Change `docs/orders/<loop>.md`, append one dated line under Changes, and run `scripts/mission-guard orders` on its head. It fails a Target below the Floor. Then grade it by the charter's merge policy.
-- **founder:** the Mission, Good block, hard limits or X surfaces are mission blocks. Make the change in a PR, label it `founder` and leave it for the user. After they merge it, they bless the charter again at their own terminal.
+- **orders:** an Orders PR of its own. Change `docs/orders/<loop>.md`, append one dated line under Changes, and run `scripts/mission-guard orders` on its head. Then grade it by the charter's merge policy.
+- **founder:** the Mission (with its Floor and Source), hard limits or X surfaces are mission blocks. Make the change in a PR, label it `founder` and leave it for the user. After they merge it, they bless the charter again at their own terminal.
 - **status:** pause or resume on the charter's `status:` line, landed the way its kill switch says.
 - **reschedule:** `new-loop --reschedule --name <loop> --runtime <r> --schedule '<cron>'`. It rewrites the runner, the schedule file and the registry row, and prints how to stop the old schedule and install the new one. Both happen on the user's yes. A runtime change also rewrites the kill switch, which is a founder PR, and `docs/RUNTIMES.md` decides the runtime.
 - **retire:** ask why, and show what goes. On a yes, stop the schedule with the kill switch's hard stop and remove its file (the plist from LaunchAgents, the crontab line, the routine or task). Delete its registry row and keep the charter. Write the reason in one line in `docs/DECISIONS.md`. The factory's `fleet` skill does the same when it's installed.

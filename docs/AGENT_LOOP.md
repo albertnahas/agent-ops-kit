@@ -10,7 +10,12 @@ Single source of truth for the scheduled agent. It overrides the routine's promp
 
 <!-- mission -->
 <One or two sentences: what the agent operates, what "better" means, and what it must never trade away for it.>
+
+- **Floor:** at least <number> <unit> <window> (baseline <value>, <dates>), or `unmeasured: <the missing data and what would create it>`
+- **Source:** <where that fact is read. Never this loop's report or anything else the loop writes.>
 <!-- /mission -->
+
+The Floor is the least this loop may deliver, written `at least` or `at most` and then the number. Set it from a real baseline: the worst full week (or run, for a weekly or monthly loop) in the reference period, so a normal week passes and a fall below the worst seen is a real drop. With no data yet, write it unmeasured and name the gap; never invent a number. The loop's outcome check reads the Source against it.
 
 ## Kill switch
 

@@ -30,7 +30,7 @@ You need Claude Code v2.1.295 or later, `gh`, `jq` and `python3`. Install the pl
 
 Then, in the repo you want a loop on, run `/agent-ops-kit:new-loop`, or just ask Claude Code for a new loop. It asks what the loop should achieve, how you'll know it worked, the least it may deliver and where that number lives, when and where it runs, and which project it's for. Everything else starts from a default it tells you once, and you can change any of it in the charter later. [docs/RUNTIMES.md](docs/RUNTIMES.md) settles where: a cloud routine, launchd, cron or a desktop app task. Then `bin/new-loop` writes the loop the same way every time:
 
-- the charter in `docs/loops/<name>.md`, with your words in its Mission, Good block, hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
+- the charter in `docs/loops/<name>.md`, with your words in its Mission (and the Floor and Source inside it), hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
 - the outcome check in `$AGENT_OPS_DIR/checks/<name>.py`, written before the loop's first prompt: today's report landed, and the number in your Floor holds;
 - a runner that exports `OPS_LOOP` with a budget and turn cap, and a schedule file it doesn't install;
 - a row in `$AGENT_OPS_DIR/REGISTRY.md`;

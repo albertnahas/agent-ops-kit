@@ -3,12 +3,12 @@
 
 Its flags are the `new` questions and the `defaults` in skills/new-loop/questions.json, the spec the skill
 and the dashboard form read too. Only the `new` ones without a default are needed; --repo defaults to the
-checkout you're in, --name to its folder name and --outcome to the mission. docs/RUNTIMES.md says which
+checkout you're in and --name to its folder name. docs/RUNTIMES.md says which
 --runtime fits.
 
 Writes, refusing to overwrite any of them:
-  REPO/docs/loops/NAME.md         the charter, from the kit's docs/AGENT_LOOP.md, with its Good block filled
-  REPO/docs/orders/NAME.md        its Orders, from examples/orders.md, with the Target at the Floor
+  REPO/docs/loops/NAME.md         the charter, from the kit's docs/AGENT_LOOP.md, with its Mission, Floor and Source filled
+  REPO/docs/orders/NAME.md        its Orders, from examples/orders.md
   $AGENT_OPS_DIR/checks/NAME.py   the outcome check, from templates/new-loop/check.py
   $AGENT_OPS_DIR/runners/NAME.sh  the runner (launchd and cron), exporting OPS_LOOP with cost caps
   $AGENT_OPS_DIR/schedules/...    a launchd plist, a crontab line, or a routine or app task prompt, not installed
@@ -35,8 +35,6 @@ INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "
 GENERIC = {"letter", "number", "journey", "file", "name", "n", "how", "what"}  # template words that stay as written
 cell = lambda v: " ".join(str(v).split()).replace("|", "\\|")  # one line, with any | escaped, in a markdown table cell
 LEVEL = r"(at least|at most)\s+[\d,]*\.?\d+"
-GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:**\n- **Check:**\n"
-        "<!-- /mission -->\n\n")  # #22's block, for a template that predates it
 
 
 def args():
@@ -60,7 +58,6 @@ def args():
     a.repo = Path(a.repo or top or ".").expanduser().resolve()
     ascii_name = unicodedata.normalize("NFKD", a.repo.name).encode("ascii", "ignore").decode().lower()
     a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", ascii_name).strip("-.")
-    a.outcome = " ".join((a.outcome or a.mission or "").split())
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
         p.error("--name is letters, digits, _ . and -, and not you or nobody; pass one when the repo's folder name gives none")
@@ -95,8 +92,7 @@ def calendar(cron):
 def fill(template, a, charter):
     """The kit's charter with this loop's words in it, or exit naming a placeholder it doesn't know. The words go in
     as numbered tokens first, so the scan sees only the template, never a < or > the user typed."""
-    text = template if "\n## Good\n" in template else template.replace("## Kill switch", GOOD + "## Kill switch", 1)
-    check = f"$AGENT_OPS_DIR/checks/{a.name}.py"
+    text = template
     surfaces, values = "".join(f"- {s}\n" for s in a.x_surface), []
     for pattern, value in [
             (r"^# <Project>", f"# {a.name}"),
@@ -104,13 +100,10 @@ def fill(template, a, charter):
             (r"(?<=^## Mission\n\n<!-- mission -->\n)<.*>$", a.mission),
             (HARD_STOP, RUNTIMES[a.runtime]["stop"].format(name=a.name) + "."),
             (r"(?<=^## Hard limits\n\n<!-- mission -->\n)<.*>$", a.limits),
-            (r"^- \*\*Outcome:\*\*.*$", f"- **Outcome:** {a.outcome}"),
             (r"^- \*\*Floor:\*\*.*$", f"- **Floor:** {a.floor}"),
             (r"^- \*\*Source:\*\*.*$", f"- **Source:** {a.source}"),
-            (r"^- \*\*Check:\*\*.*$", f"- **Check:** `{check}`, measuring `{a.measure}`: exists" if a.measure
-             else f"- **Check:** `{check}`: exists, checking the report only until the Floor is measured"),
             (r"^- <source>: .*$", f"- {a.source}: `{a.measure}`" if a.measure else f"- {a.source}"),
-            (r"^\| <metric> .*$", f"| {cell(a.outcome)} | {cell(a.floor)} | below the Floor |"),
+            (r"^\| <metric> .*$", f"| {cell(a.mission)} | {cell(a.floor)} | below the Floor |"),
             (r"^- <your own surfaces>\n", surfaces),
             (r" <Add yours\.>", "")]:
         text = re.sub(pattern, f"\0{len(values)}\0", text, count=1, flags=re.M)
@@ -123,13 +116,10 @@ def fill(template, a, charter):
 
 
 def orders(template, a):
-    """examples/orders.md for this loop: its supervisor, no Orders yet, a Target at the Floor, one Changes line."""
+    """examples/orders.md for this loop: its supervisor, no Orders yet, one Changes line."""
     who = f"{a.supervisor}, Mondays" if a.supervisor else "you"
     text = re.sub(r"^# Orders: .*$", f"# Orders: {a.name}", template, count=1, flags=re.M)
     text = re.sub(r"^Supervisor: [^.]*", f"Supervisor: {who}", text, count=1, flags=re.M)
-    target = f"Target: {a.floor} (the charter's Floor; a Target may only raise it)"
-    text = re.sub(r"^Target: .*$", target, text, count=1, flags=re.M) if re.search(r"^Target: ", text, re.M) \
-        else text.replace("| Order |", f"{target}\n\n| Order |", 1)  # #22's line, for a template that predates it
     text = re.sub(r"(\|---.*\n)(\|.*\n)+", r"\1", text, count=1)
     return text.split("date | why | by")[0] + f"date | why | by\n{dt.date.today()} | first Orders, from new-loop | you\n"
 
