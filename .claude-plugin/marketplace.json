@@ -9,7 +9,7 @@
     {
       "name": "agent-ops-kit",
       "source": "./",
-      "description": "claude-run, ops-check and heartbeat.py on your path: a run ledger, outcome checks and a heartbeat for scheduled loops."
+      "description": "/new-loop sets up a scheduled loop from a few questions; claude-run, ops-check and heartbeat.py give it a run ledger, outcome checks and a heartbeat."
     }
   ]
 }

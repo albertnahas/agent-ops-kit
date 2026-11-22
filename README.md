@@ -20,27 +20,39 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 - **Blast radius:** A merges itself, B gets fixed then merged, C gets closed, X waits for you. X means a revert won't fully undo it: money, data-destroying migrations, auth, secrets, new dependencies, paid API spend, deleting user data, the policy itself. The charter also lists what isn't X. Without that list a careful grader escalates everything and the real escalations drown.
 - **Proof videos:** every PR a user would see ships a phone-width Playwright video of the journey. Tests pass while artwork is hidden. A video doesn't.
 
-## Install as a Claude Code plugin
+## Start a loop
+
+You need Claude Code v2.1.295 or later, `gh`, `jq` and `python3`. Install the plugin:
 
 ```
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook, and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
+Then, in the repo you want a loop on, run `/new-loop`. It asks four things: what the loop should achieve, how you'd know it worked as a number it doesn't write, what it must never do, and when and where it runs (launchd, cron or a cloud routine). Then `bin/new-loop` writes the loop the same way every time:
 
-## Try it in 5 minutes
+- the charter in `docs/loops/<name>.md`, with your words in its Mission, Good block, hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
+- the outcome check in `$AGENT_OPS_DIR/checks/<name>.py`, written before the loop's first prompt: today's report landed, and the number in your Floor holds;
+- a runner that exports `OPS_LOOP` with a budget and turn cap, and a schedule file it doesn't install;
+- a row in `$AGENT_OPS_DIR/REGISTRY.md`;
+- whatever the charter relies on that the repo lacks: the grader, the hooks, `claude-run`, `ops-check` and `scripts/mission-guard`.
 
-You need Claude Code v2.1.295 or later, `gh`, `jq` and `python3`.
+The skill dry runs the check, then leaves three steps to you: merge the PR, bless the charter at your own terminal, and say yes to the schedule. Watch the first week. Read every report and every grade before you trust it.
+
+Protect main if your plan allows it. The guard hook is a speed bump. Branch protection is the wall.
+
+### By hand
+
+The same thing without the plugin:
 
 ```bash
 git clone https://github.com/albertnahas/agent-ops-kit && cd agent-ops-kit
 ```
 
 ```bash
-tests/hooks.test.sh && tests/ops.test.sh
+tests/hooks.test.sh && tests/ops.test.sh && tests/new-loop.test.sh
 ```
 
-Every line should say `ok`. Then copy it into your repo:
+Every line should say `ok`, or `skip` for the factory check when you don't have the factory. Then run `bin/new-loop --help` and follow what it prints, or copy the pieces yourself:
 
 ```bash
 cp -R .claude bin checks docs scripts tests /path/to/your-repo/
@@ -53,8 +65,8 @@ cd /path/to/your-repo && for l in founder grade:A grade:B grade:C grade:X; do gh
 1. Fill in every `<placeholder>` in `docs/AGENT_LOOP.md` and add your own X surfaces.
 2. Run one loop by hand with `scripts/run.sh`, then `bin/heartbeat.py`. Read `logs/agent.log` and `~/.agent-ops/COSTS.md`.
 3. Schedule both (`examples/crontab`), or make the loop a cloud scheduled task with `examples/cloud-task-prompt.md`. Add the cloud watcher from `examples/heartbeat-watch-prompt.md`.
-4. Protect main if your plan allows it. The guard hook is a speed bump. Branch protection is the wall.
-5. Watch the first week. Read every report and every grade before you trust it.
+
+The plugin's scripts are on your path, but the charter, the grader, the hooks and the checks belong in your repo. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook, and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
 
 The support agent comes later. It needs a product with a ticket table and a deploy you trust.
 
@@ -66,6 +78,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `.claude/agents/pr-grader.md` | The grader. A frontmatter hook limits its Bash to `gh pr view` and `gh pr diff`. |
 | `.claude/hooks/guard-bash.sh` | Blocks force pushes and pushes to main, so the agent works through PRs. |
 | `.claude/settings.json` | Wires the guard with `onFailure: block`, so a broken hook stops the call instead of letting it through. Adds deny rules. |
+| `skills/new-loop/`, `bin/new-loop` | The `/new-loop` skill and the script it calls. The script fills the charter from `docs/AGENT_LOOP.md` and the check, runner and registry from `templates/new-loop/`, and exits if the charter template gains a placeholder it can't fill. |
 | `scripts/run.sh` | Runs one loop with turn and budget caps, after checking the charter's pause line, and ends with the outcome check. |
 | `bin/claude-run` | Drop-in for `claude -p`. Logs each run's exit, turns and cost to `$AGENT_OPS_DIR/runs.jsonl` (default `~/.agent-ops`). |
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
@@ -74,7 +87,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes; `pr` makes a PR that changes it, the guard, the grader, hooks or CI workflows X; `orders` checks an Orders-only PR. Product repos keep a copy at `scripts/mission-guard`, and `examples/mission-guard.yml` runs it as a required check. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
-| `tests/` | Feeds known commands to both hooks, and fixture ledgers to `ops-check` and the heartbeat. |
+| `tests/` | Feeds known commands to both hooks, and fixture ledgers to `ops-check` and the heartbeat. `new-loop.test.sh` scaffolds loops in a sandbox and fails unless they bless, pass their own check and pass the factory's `fleet.py --check`. |
 | `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, one that runs the mission guard as a required check, and the support agent. |
 
 ## Limits, honestly
