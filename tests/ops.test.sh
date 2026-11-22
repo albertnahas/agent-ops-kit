@@ -33,6 +33,30 @@ expect "heartbeat flags malformed ledger lines and keeps going" "jq -e '[.alerts
 expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | \\\$15.00' $AGENT_OPS_DIR/COSTS.md"
 expect "heartbeat logs its own pass line" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\": \"heartbeat\"'"
 expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
+echo "{\"loop\":\"broken\",\"date\":\"$(day 0)\",\"check\":\"fail\",\"detail\":\"again\"}" >> "$AGENT_OPS_DIR/runs.jsonl"
+expect "a check failing again the next day is held too" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
+expect "ops-check with no command is a usage error, not a pass" "! bin/ops-check -l empty -- 2>/dev/null && ! grep -q '\"loop\":\"empty\"' $AGENT_OPS_DIR/runs.jsonl"
+
+# the watchman survives any ledger: bad bytes, a cut last line, odd field types, Z and offset dates, a future date
+j=$(mktemp -d)
+{ echo "{\"loop\":\"z\",\"date\":\"$(day 1)Z\",\"check\":\"pass\"}"; echo "{\"loop\":\"z\",\"date\":\"$(day 0)+05:30\",\"check\":\"pass\"}"
+  echo '{"loop":["l"],"date":"2026-11-01T10:00:00"}'; echo '{"loop":"c","date":"","cost":"9"}'; echo '{"loop":"c","date":"2999-01-01T00:00:00"}'
+  echo "{\"loop\":\"c\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":\"lots\"}"; printf 'nul\0 and \303(\n'; printf '{"loop":"cut","date":"2026-11-0'; } > "$j/runs.jsonl"
+expect "heartbeat skips junk lines with an alert and logs its own line apart" "AGENT_OPS_DIR=$j bin/heartbeat.py | tail -1 | jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 5' >/dev/null && tail -1 $j/runs.jsonl | jq -e '.loop == \"heartbeat\"' >/dev/null"
+rm -rf "$j"
+for n in false /no/such/notifier; do j=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" > "$j/runs.jsonl"
+  expect "a notifier that fails ($n) makes the heartbeat's own line a fail" "AGENT_OPS_DIR=$j AGENT_OPS_NOTIFY=$n bin/heartbeat.py >/dev/null 2>&1; tail -1 $j/runs.jsonl | jq -e '.check == \"fail\" and (.detail | contains(\"notifier\"))' >/dev/null"; rm -rf "$j"; done
+
+# git: it syncs only its own repo, and two writers to runs.jsonl never wedge it
+r=$(mktemp -d); git init -q --bare "$r/o.git"; git clone -q "$r/o.git" "$r/a" 2>/dev/null; git clone -q "$r/o.git" "$r/b" 2>/dev/null
+g2() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
+echo '{"loop":"b","date":"2026-11-01T10:00:00","check":"pass"}' > "$r/b/runs.jsonl"; g2 "$r/b" add -A; g2 "$r/b" commit -qm b; g2 "$r/b" push -q origin HEAD
+echo '{"loop":"a","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/runs.jsonl"
+AGENT_OPS_DIR="$r/a" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null
+expect "two writers' ledger lines merge and push" "g2 $r/a fetch -q && [ \$(g2 $r/a show origin/HEAD:runs.jsonl | grep -c '\"loop\"') = 3 ] && ! grep -q '<<<<' $r/a/runs.jsonl"
+mkdir -p "$r/a/inner/.git"; echo '{"loop":"i","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/inner/runs.jsonl"; head=$(g2 "$r/a" rev-parse HEAD)
+expect "an empty .git inside never commits the enclosing repo" "AGENT_OPS_DIR=$r/a/inner bin/heartbeat.py >/dev/null && [ \$(g2 $r/a rev-parse HEAD) = $head ]"
+rm -rf "$r"
 
 # mission-guard: bless what's on the default branch (master here, to prove it isn't assumed), then catch drift
 g=$(mktemp -d); git init -q --bare -b master "$g/origin.git"; git clone -q "$g/origin.git" "$g/w" 2>/dev/null
