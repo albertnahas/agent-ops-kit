@@ -44,8 +44,8 @@ j=$(mktemp -d)
   echo "{\"loop\":\"c\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":\"lots\"}"; printf 'nul\0 and \303(\n'; printf '{"loop":"cut","date":"2026-11-0'; } > "$j/runs.jsonl"
 expect "heartbeat skips junk lines with an alert and logs its own line apart" "AGENT_OPS_DIR=$j bin/heartbeat.py | tail -1 | jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 5' >/dev/null && tail -1 $j/runs.jsonl | jq -e '.loop == \"heartbeat\"' >/dev/null"
 rm -rf "$j"
-for n in false /no/such/notifier; do j=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" > "$j/runs.jsonl"
-  expect "a notifier that fails ($n) makes the heartbeat's own line a fail" "AGENT_OPS_DIR=$j AGENT_OPS_NOTIFY=$n bin/heartbeat.py >/dev/null 2>&1; tail -1 $j/runs.jsonl | jq -e '.check == \"fail\" and (.detail | contains(\"notifier\"))' >/dev/null"; rm -rf "$j"; done
+for n in false /no/such/notifier "'unclosed"; do j=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" > "$j/runs.jsonl"
+  expect "a notifier that fails ($n) makes the heartbeat's own line a fail" "AGENT_OPS_DIR=$j AGENT_OPS_NOTIFY=\"$n\" bin/heartbeat.py >/dev/null 2>&1; tail -1 $j/runs.jsonl | jq -e '.check == \"fail\" and (.detail | contains(\"notifier\"))' >/dev/null"; rm -rf "$j"; done
 
 # git: it syncs only its own repo, and two writers to runs.jsonl never wedge it
 r=$(mktemp -d); git init -q --bare "$r/o.git"; git clone -q "$r/o.git" "$r/a" 2>/dev/null; git clone -q "$r/o.git" "$r/b" 2>/dev/null

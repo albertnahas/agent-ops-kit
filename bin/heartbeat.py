@@ -93,7 +93,7 @@ if due:
     try:
         sent = subprocess.run([*shlex.split(notify), subject, body] if notify else ["printf", "%s\n\n%s\n", subject, body], stderr=subprocess.PIPE, text=True)
         undelivered = sent.returncode and f"the notifier exited {sent.returncode}: {sent.stderr.strip()[-200:]}"
-    except OSError as e:
+    except (OSError, ValueError) as e:  # a notifier that won't start, or AGENT_OPS_NOTIFY that won't parse
         undelivered = f"the notifier didn't start: {e}"
     if not undelivered:
         state.update({k: now.isoformat() for k in due})
@@ -116,4 +116,4 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     if sync.returncode: git("rebase", "--abort")
     else: sync = git("push", "-q")
     if sync.returncode: log("fail", "the ops repo didn't sync: " + (sync.stderr.strip().splitlines() or ["?"])[-1][:200])
-print(json.dumps({"alerts": list(alerts), "sent": list(due)}))
+print(json.dumps({"alerts": list(alerts), "sent": [] if undelivered else list(due)}))
