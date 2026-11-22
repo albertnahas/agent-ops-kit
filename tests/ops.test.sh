@@ -50,9 +50,12 @@ expect "mission-guard won't bless an unpushed edit" "! bin/mission-guard bless $
 expect "mission-guard check ignores an unpushed edit" "bin/mission-guard check >/dev/null"
 expect "mission-guard pr flags the edit in a checkout" "! (cd $g/w && $PWD/bin/mission-guard pr >/dev/null)"
 c commit -qam edit && c push -q origin HEAD:master
-expect "mission-guard check fails on a pushed edit, with the diff" "bin/mission-guard check | grep -q '^    +Always lower'; [ \${PIPESTATUS[0]} = 1 ]"
+expect "mission-guard check fails on a pushed edit, with the diff" "o=\$(bin/mission-guard check); [ \$? = 1 ] && grep -q '^    +Always lower' <<<\"\$o\""
 out=$(bin/heartbeat.py | tail -1)
-expect "heartbeat alerts on mission drift" "jq -e '.alerts | map(startswith(\"mission:\")) | any' <<<'$out' >/dev/null"
+expect "heartbeat alerts on mission drift, keyed by the charter" "jq -e '.alerts | any(startswith(\"mission:\") and endswith(\"/w/C.md\"))' <<<'$out' >/dev/null"
+cp $AGENT_OPS_DIR/missions.json $AGENT_OPS_DIR/m.bak; echo '{' > $AGENT_OPS_DIR/missions.json
+expect "a broken missions.json is a guard failure, not drift" "bin/heartbeat.py | tail -1 | jq -e '.alerts | index(\"mission-guard\")' >/dev/null"
+mv $AGENT_OPS_DIR/m.bak $AGENT_OPS_DIR/missions.json
 bin/mission-guard bless "$g/w/C.md" >/dev/null
 expect "a bless after the push clears it" "bin/mission-guard check >/dev/null"
 rm -rf "$g"

@@ -55,7 +55,7 @@ def load():
 
 
 def diff(old, new):
-    lines = [l for l in difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=0)[2:] if l[:1] in "+-"]
+    lines = [l for l in list(difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=0))[2:] if l[:1] in "+-"]
     return "\n".join("    " + l for l in lines[:8])
 
 
@@ -83,17 +83,25 @@ def bless(files):
 
 
 def check():
-    store, bad = load(), 0
+    """Prints `drift: <path>` (with the diff) or `unreadable: <path>: <why>` per charter.
+    Exits 1 on any drift, else 2 if any charter couldn't be read, else 0."""
+    store, drift, unread = load(), 0, 0
     for path, e in store.items():
         text, why = default_text(e["repo"], e["rel"])
         now = why or blocks(text)
         if now == e["blocks"]:
             continue
-        bad += 1
-        detail = "    " + now if isinstance(now, str) else diff("\n\n".join(e["blocks"]), "\n\n".join(now))
-        print(f"{path}: mission blocks changed since the bless on {e['blessed']}\n{detail}")
-    print(f"{len(store) - bad} of {len(store)} charters clean")
-    return 1 if bad else 0
+        if why:
+            unread += 1
+            print(f"unreadable: {path}: {why}")
+        elif isinstance(now, str):
+            drift += 1
+            print(f"drift: {path}: {now} since the bless on {e['blessed']}")
+        else:
+            drift += 1
+            print(f"drift: {path}: changed since the bless on {e['blessed']}\n{diff(chr(10).join(e['blocks']), chr(10).join(now))}")
+    print(f"{len(store) - drift - unread} of {len(store)} charters clean")
+    return 1 if drift else 2 if unread else 0
 
 
 def pr():
@@ -101,7 +109,7 @@ def pr():
     url = git(str(top), "remote", "get-url", "origin").stdout
     hits = 0
     for e in load().values():
-        if Path(e["repo"]).resolve() != top and git(e["repo"], "remote", "get-url", "origin").stdout != url:
+        if Path(e["repo"]).resolve() != top and (not url or git(e["repo"], "remote", "get-url", "origin").stdout != url):
             continue
         f = top / e["rel"]
         if (blocks(f.read_text()) if f.is_file() else "deleted") != e["blocks"]:

@@ -52,10 +52,14 @@ for loop, rs in by_loop.items():
         alerts[f"cost:{loop}:{claude[-1]['date'][:10]}"] = f"{loop}: last run cost ${claude[-1]['cost']:.2f}, over 3x its usual ${median(costs):.2f}."
 
 guard = subprocess.run([str(Path(__file__).with_name("mission-guard")), "check"], capture_output=True, text=True)
-if guard.returncode:
-    drifts = re.split(r"\n(?=\S)", guard.stdout.strip())[:-1] or [(guard.stderr or guard.stdout).strip()[-500:]]
-    for d in drifts:
-        alerts[f"mission:{d.split(':', 1)[0]}"] = "A charter's mission blocks changed without your bless. Revert it, or bless it if it was you:\n" + d
+for item in re.split(r"\n(?=\S)", guard.stdout.strip()):
+    kind, _, rest = item.partition(": ")
+    if kind == "drift":
+        alerts[f"mission:{rest.split(':', 1)[0]}"] = "A charter's mission blocks changed without your bless. Revert it, or bless it if it was you:\n" + rest
+    elif kind == "unreadable":
+        alerts[f"mission-unreadable:{rest.split(':', 1)[0]}"] = "mission-guard couldn't read a charter, so it isn't guarded right now: " + rest
+if guard.returncode and not re.search(r"^(drift|unreadable): ", guard.stdout, re.M):
+    alerts["mission-guard"] = "mission-guard failed, so no charter is guarded right now: " + (guard.stderr or guard.stdout).strip()[-400:]
 
 since = lambda days: (now - dt.timedelta(days=days)).isoformat()
 cost = lambda rs, days: sum(r.get("cost") or 0 for r in rs if "check" not in r and r["date"] >= since(days))
