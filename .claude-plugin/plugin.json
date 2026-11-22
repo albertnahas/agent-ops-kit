@@ -1,10 +1,10 @@
 {
   "name": "agent-ops-kit",
-  "version": "0.2.0",
-  "description": "Run scheduled Claude Code agent loops you can trust: plan the loops a project needs, see every loop's health, cost and checker on one dashboard, retire the ones nobody reads.",
+  "version": "0.3.0",
+  "description": "A software factory of scheduled Claude Code loops: a playbook for starting one, a planner for the loops a project needs, and one dashboard for every loop's health, cost and checker.",
   "author": { "name": "Albert Nahas", "url": "https://github.com/albertnahas" },
   "homepage": "https://github.com/albertnahas/agent-ops-kit",
   "repository": "https://github.com/albertnahas/agent-ops-kit",
   "license": "MIT",
-  "keywords": ["agents", "loops", "scheduled", "dashboard", "ops", "launchd", "cron"]
+  "keywords": ["agents", "loops", "software-factory", "scheduled", "dashboard", "ops", "launchd", "cron"]
 }
