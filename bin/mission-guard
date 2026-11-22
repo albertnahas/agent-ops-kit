@@ -121,7 +121,7 @@ def check():
 def pr():
     """Store-free, so it works wherever the PR is checked out (a cloud grader too). Compares every file
     with mission markers, in this checkout or on the default branch, against the default branch.
-    Exits 1 if any marked block differs (grade X), 2 if it can't tell (treat as X), 0 if none do."""
+    Also flags a change to the guard itself. Exits 1 on any hit (grade X), 2 if it can't tell (treat as X), 0 if none."""
     top = git(".", "rev-parse", "--show-toplevel").stdout.strip()
     if not top:
         print("not inside a git checkout: can't tell, treat the PR as X")
@@ -139,7 +139,12 @@ def pr():
         if (blocks(f.read_text()) if f.is_file() else "deleted") != (blocks(base.stdout) if base.returncode == 0 else "new"):
             hits += 1
             print(f"{rel}: this checkout changes its mission blocks. Grade X.")
-    print(f"{hits} of {len(files)} charter(s) with changed mission blocks")
+    for rel in ("scripts/mission-guard", "bin/mission-guard"):
+        f, base = Path(top) / rel, git(top, "show", f"origin/{branch}:{rel}")
+        if (f.read_text() if f.is_file() else None) != (base.stdout if base.returncode == 0 else None):
+            hits += 1
+            print(f"{rel}: this checkout changes the mission guard itself. Grade X.")
+    print(f"{hits} of {len(files)} charter(s) with changed mission blocks, or the guard changed")
     return 1 if hits else 0
 
 

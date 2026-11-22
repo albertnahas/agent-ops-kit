@@ -51,6 +51,7 @@ expect "mission-guard check ignores an unpushed edit" "bin/mission-guard check >
 expect "mission-guard pr flags the edit in a checkout" "! (cd $g/w && $PWD/bin/mission-guard pr >/dev/null)"
 expect "mission-guard pr needs no store" "o=\$(cd $g/w && AGENT_OPS_DIR=\$(mktemp -d) $PWD/bin/mission-guard pr); grep -q '^C.md: ' <<<\"\$o\""
 expect "mission-guard pr passes a steps-only change" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && echo more >> \$d/c/C.md && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null)"
+expect "mission-guard pr flags a change to the guard itself" "(d=\$(mktemp -d) && git clone -q $g/origin.git \$d/c && mkdir -p \$d/c/scripts && echo 'print(0)' > \$d/c/scripts/mission-guard && cd \$d/c && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 1 ])"
 expect "mission-guard pr fails closed with no origin" "(d=\$(mktemp -d) && git init -q \$d && cd \$d && $PWD/bin/mission-guard pr >/dev/null; [ \$? = 2 ])"
 c commit -qam edit && c push -q origin HEAD:master
 expect "mission-guard check fails on a pushed edit, with the diff" "o=\$(bin/mission-guard check); [ \$? = 1 ] && grep -q '^    +Always lower' <<<\"\$o\""
