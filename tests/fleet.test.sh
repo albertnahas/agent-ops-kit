@@ -24,6 +24,15 @@ cat > "$AGENT_OPS_DIR/REGISTRY.md" <<EOF
 | broken | Shop | cloud | routine:broken | daily | | | good, heartbeat |
 | flaky |  | cloud | routine:flaky | daily | | | you |
 | fresh | Blog | cloud | routine:fresh | daily | | | you |
+| reader | Blog | cloud | routine:reader-job | daily | | | routine:good, YOU, flaky, you, reader-job |
+| lonely | Blog | cloud | routine:lonely | daily | | | |
+| watched | Blog | cloud | routine:watched | daily | | | com.me.build |
+
+## Services
+
+| Service | Job | What it is |
+|---|---|---|
+| Build | com.me.build | rebuilds the page |
 EOF
 {
   echo "{\"loop\":\"good\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":2}"
@@ -33,7 +42,7 @@ EOF
   echo "{\"loop\":\"stray\",\"date\":\"$(day 1)\",\"subtype\":\"success\"}"
   printf 'not json\n{}\n'
 } > "$AGENT_OPS_DIR/runs.jsonl"
-echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[$(for r in good broken flaky fresh; do printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' $r; done | sed 's/,$//')],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
+echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[$(for r in good broken flaky fresh reader-job lonely watched; do printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' $r; done | sed 's/,$//')],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
 
 echo "{\"launch_agents\": \"$AGENT_OPS_DIR/none\", \"general\": [\"blog\"], \"waiting\": {\"queue\": {\"path\": \"$AGENT_OPS_DIR/QUEUE.md\", \"owner\": \"You\"}}}" > "$AGENT_OPS_DIR/fleet.json"
 printf 'due | kind | item | owner | next action | done when | source\n---\n2026-12-01 | decision | Pick a price | You | decide | priced | agent\n' > "$AGENT_OPS_DIR/QUEUE.md"
@@ -46,6 +55,9 @@ expect "3 of the last 7 failed is flaky"       "[ \"\$(status flaky)\" = chronic
 expect "never run is not run yet"              "[ \"\$(status fresh)\" = 'no runs yet' ]"
 expect "a ledger name with no row is unregistered" "[ \"\$(status stray)\" = unregistered ]"
 expect "checked by is a list"                  "jq -e '.rows[] | select(.loop == \"broken\") | .checked_by == [\"good\", \"heartbeat\"]' $L >/dev/null"
+expect "checked by resolves jobs and you, once each" "jq -e '.rows[] | select(.loop == \"reader\") | .checked_by == [\"good\", \"you\", \"flaky\", \"reader\"]' $L >/dev/null"
+expect "a service's job names the service"   "jq -e '.rows[] | select(.loop == \"watched\") | .checked_by == [\"Build\"]' $L >/dev/null"
+expect "no checker is an empty list"           "jq -e '.rows[] | select(.loop == \"lonely\") | .checked_by == []' $L >/dev/null"
 expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
 expect "a project is its own scope"           "[ \"\$(scope good)\" = Shop ]"
 expect "no project is General"                 "[ \"\$(scope flaky)\" = General ]"

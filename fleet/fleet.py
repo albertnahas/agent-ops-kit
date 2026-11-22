@@ -265,6 +265,13 @@ def build():
                      "status": "paused" if not j.get("loaded") else "service" if j.get("exit") in (0, None) else "failing",
                      "detail": f"last run exited {j['exit']}" if j.get("exit") not in (0, None) else ""})
 
+    # Checked by names a loop or service by its name or its job, with or without the routine:/task: prefix, or you;
+    # any other name is kept as written, a checker the registry doesn't have.
+    alias = {k: r["loop"] for r in rows for k in (r["job"], r["job"].partition(":")[2]) if k} | {r["loop"]: r["loop"] for r in rows}
+    for r in rows:
+        if "checked_by" in r:
+            r["checked_by"] = list(dict.fromkeys("you" if c.lower() == "you" else alias.get(c, c) for c in r["checked_by"]))
+
     for label, j in jobs.items():
         if label in claimed or j["vendor"] or not j["loaded"]: continue
         runtime = "cron" if label.startswith("cron:") else "mac"
