@@ -17,10 +17,10 @@ and copies into REPO whatever the charter relies on that it lacks: the grader, t
 ops-check, scripts/mission-guard and docs/DECISIONS.md. Text for mission blocks is the user's, verbatim.
 It commits, pushes, blesses and schedules nothing: it prints those steps.
 
-new-loop --reschedule --repo PATH --name NAME --runtime R --schedule CRON moves an existing loop: it rewrites
+new-loop --reschedule [--repo PATH] --name NAME --runtime R --schedule CRON moves an existing loop: it rewrites
 its runner, schedule file and registry row, and, when the runtime changes, the charter's kill switch line,
 which is a mission block, so that one lands as a founder PR. It prints how to stop the old schedule."""
-import argparse, datetime as dt, json, os, plistlib, re, shlex, shutil, sys
+import argparse, datetime as dt, json, os, plistlib, re, shlex, shutil, subprocess, sys, unicodedata
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
@@ -53,12 +53,14 @@ def args():
         if "default" in q and getattr(a, q["id"]) is None:
             setattr(a, q["id"], caps.get(q["id"], q["default"]))
     need = ("name", "runtime", "schedule") if a.reschedule else [q["id"] for q in spec if q["required"]]
-    missing = [f"--{n}" for n in need if not getattr(a, n.replace("-", "_"))]
+    missing = [f"--{n}" for n in need if not str(getattr(a, n.replace("-", "_"))).strip()]
     if missing:
         p.error("missing " + ", ".join(missing))
-    a.repo = Path(a.repo or ".").expanduser().resolve()
-    a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", a.repo.name.lower()).strip("-.")
-    a.outcome = a.outcome or " ".join(a.mission.split())
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    a.repo = Path(a.repo or top or ".").expanduser().resolve()
+    ascii_name = unicodedata.normalize("NFKD", a.repo.name).encode("ascii", "ignore").decode().lower()
+    a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", ascii_name).strip("-.")
+    a.outcome = " ".join((a.outcome or a.mission or "").split())
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
         p.error("--name is letters, digits, _ . and -, and not you or nobody; pass one when the repo's folder name gives none")

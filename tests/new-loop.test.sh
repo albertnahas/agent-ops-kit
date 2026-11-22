@@ -89,6 +89,10 @@ Never promise a refund." --source "the support inbox" --floor "unmeasured: no in
 sc="$s/My Shop (v2)/docs/loops/my-shop-v2.md"
 expect "the essentials alone scaffold a loop, named after its repo, with the spec's default limits" "grep -qF \"\$(jq -r '.defaults[] | select(.id == \"limits\") | .default' $kit/skills/new-loop/questions.json)\" \"\$sc\" && grep -q '^| my-shop-v2 | Shop | cloud | routine:my-shop-v2 |' $AGENT_OPS_DIR/REGISTRY.md"
 expect "a two-line mission makes a one-line Outcome and KPI row" "grep -qx -- '- \*\*Outcome:\*\* Answer every support email within a day. Never promise a refund.' \"\$sc\" && grep -qx '| Answer every support email within a day. Never promise a refund. | unmeasured: no inbox access yet | below the Floor |' \"\$sc\""
+git init -q "$s/Über Café" && (cd "$s/Über Café" && mkdir -p sub && cd sub && "$kit/bin/new-loop" --mission m --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' >/dev/null)
+expect "accented folder names become plain letters, found from a subfolder" "[ -f '$s/Über Café/docs/loops/uber-cafe.md' ]"
+blank=$("$kit/bin/new-loop" --mission '  ' --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' 2>&1)
+expect "a blank required answer counts as missing" "grep -q 'missing --mission\$' <<<\"\$blank\""
 git init -q "$s/日本" && expect "a folder name with nothing usable asks for --name" "(cd $s/日本 && ! $kit/bin/new-loop --mission m --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' 2>&1 | grep -q 'pass one when')" 
 expect "nothing was installed with launchctl or crontab" "[ ! -e $s/scheduled ]"
 
