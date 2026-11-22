@@ -34,20 +34,27 @@ expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | \\\$15.00' $AGEN
 expect "heartbeat logs its own pass line" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\": \"heartbeat\"'"
 expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
 
-# mission-guard: bless, clean check, then a pushed edit to a marked block drifts
-g=$(mktemp -d); git init -q --bare "$g/origin.git"; git clone -q "$g/origin.git" "$g/w" 2>/dev/null
+# mission-guard: bless what's on the default branch (master here, to prove it isn't assumed), then catch drift
+g=$(mktemp -d); git init -q --bare -b master "$g/origin.git"; git clone -q "$g/origin.git" "$g/w" 2>/dev/null
+c() { git -C "$g/w" -c user.name=t -c user.email=t@t "$@"; }
 printf '# C\n<!-- mission -->\nNever lower a baseline.\n<!-- /mission -->\nsteps\n' > "$g/w/C.md"
-git -C "$g/w" add . && git -C "$g/w" -c user.name=t -c user.email=t@t commit -qm c && git -C "$g/w" push -q origin HEAD:main
-printf 'plain\n' > "$g/w/N.md"
+printf 'plain\n' > "$g/w/N.md"; printf '<!-- mission -->\nopen\n' > "$g/w/U.md"
+c add . && c commit -qm c && c push -q origin HEAD:master
 expect "mission-guard refuses a file with no blocks" "! bin/mission-guard bless $g/w/N.md 2>/dev/null"
+expect "mission-guard refuses an unclosed block" "! bin/mission-guard bless $g/w/U.md 2>/dev/null"
+expect "a failed bless records nothing" "[ ! -e $AGENT_OPS_DIR/missions.json ]"
 bin/mission-guard bless "$g/w/C.md" >/dev/null
-expect "mission-guard check is clean after bless" "bin/mission-guard check | grep -q '^1 charters clean'"
+expect "mission-guard check is clean after bless" "bin/mission-guard check | grep -q '^1 of 1 charters clean'"
 sed -i.bak 's/Never lower/Always lower/' "$g/w/C.md" && rm "$g/w/C.md.bak"
-expect "mission-guard ignores an unpushed edit" "bin/mission-guard check >/dev/null"
-git -C "$g/w" -c user.name=t -c user.email=t@t commit -qam edit && git -C "$g/w" push -q origin HEAD:main
-expect "mission-guard fails on a pushed edit to a block" "! bin/mission-guard check >/dev/null"
+expect "mission-guard won't bless an unpushed edit" "! bin/mission-guard bless $g/w/C.md 2>/dev/null"
+expect "mission-guard check ignores an unpushed edit" "bin/mission-guard check >/dev/null"
+expect "mission-guard pr flags the edit in a checkout" "! (cd $g/w && $PWD/bin/mission-guard pr >/dev/null)"
+c commit -qam edit && c push -q origin HEAD:master
+expect "mission-guard check fails on a pushed edit, with the diff" "bin/mission-guard check | grep -q '^    +Always lower'; [ \${PIPESTATUS[0]} = 1 ]"
 out=$(bin/heartbeat.py | tail -1)
-expect "heartbeat alerts on mission drift" "jq -e '.alerts | index(\"mission:drift\")' <<<'$out' >/dev/null"
+expect "heartbeat alerts on mission drift" "jq -e '.alerts | map(startswith(\"mission:\")) | any' <<<'$out' >/dev/null"
+bin/mission-guard bless "$g/w/C.md" >/dev/null
+expect "a bless after the push clears it" "bin/mission-guard check >/dev/null"
 rm -rf "$g"
 
 exit $fail

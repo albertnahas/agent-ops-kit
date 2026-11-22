@@ -33,23 +33,26 @@ Every runner exports `OPS_LOOP=<registry name>`, so the ledger, the heartbeat an
 
 ## Supervisors and Orders
 
-A charter is fixed. It says what the loop is for and what it must never do. What the loop is working on this month is a different thing, and it lives in an Orders file, `docs/orders/<charter-name>.md`, one per charter (morning and evening social share one). Orders are a table: the order, what it moves, its stop rule and its read date, plus a Changes log with one line per edit. The shape is in [examples/orders.md](../examples/orders.md). The loop reads its Orders first every run, and the charter outranks every line in them.
+A charter is fixed. It says what the loop is for and what it must never do. What the loop is working on this month is a different thing, and once a loop has a supervisor it lives in an Orders file, `docs/orders/<name>.md`, one per charter (morning and evening social share one). Orders are a table: the order, what it moves, its stop rule and its read date, plus a Changes log with one line per edit. The shape is in [examples/orders.md](../examples/orders.md). The loop reads its Orders right after its charter, and the charter outranks every line in them.
 
-**Marked blocks.** The charter's Mission, Kill switch and the X list of its merge policy sit between `<!-- mission -->` and `<!-- /mission -->`. Only you edit them. A PR that touches a marked block grades X, and so does an Order that loosens a hard limit or touches an X surface. The rest of the charter (queries, report format, data quirks) stays editable through graded PRs.
+**Supervisors are optional.** A supervisor is a loop that checks how another loop is doing and writes its Orders. The registry's Supervisor column names it, or stays blank for none, and a loop with none runs as it always did, steered by you through its charter. One loop can supervise many, and a loop has at most one supervisor, so they form a tree. Plugging one in takes two edits: the cell in the registry, and a supervising duty in the supervisor's charter (the "Supervising" section of [AGENT_LOOP.md](AGENT_LOOP.md)). The supervisor creates the Orders file on its first review. Checked by stays as it is: it lists who reads the output, and a supervisor is one of them.
 
-**One writer per Orders file.** The supervisor writes it, or you do. The loop never edits its own Orders. If it wants a change, it says so under "Orders requests" in its report, and its supervisor answers. It writes only reports, logs and evidence files, and no new dated sections in its charter.
+**Marked blocks.** The charter's mission, kill switch, hard limits and the X list of its merge policy sit inside `mission` markers: an HTML comment line saying `mission` opens a block, and one saying `/mission` closes it. Write them only on their own lines, never inside a sentence. Only you edit what's inside. The rest of the charter (queries, report format, data quirks) stays editable through graded PRs.
 
-**The Supervisor column.** Each registry row names exactly one supervisor: a loop, or `you`. One loop can supervise many. It sits beside Checked by, which still lists the other readers. A supervisor always reads its children, so it's implied there. The fleet builder rejects a supervisor that isn't a loop, and cycles.
+**Who writes Orders.** The supervisor, or you. The loop may add a line only for a test it starts itself within its charter, and it closes its own lines on their read date. It never changes or removes a line someone else wrote. If it wants that, it says so under "Orders requests" in its report, and its supervisor answers. Nothing it learns becomes a new dated section in its charter: that's how charters grow to 700 lines.
 
 **What a supervisor does.**
-- It reviews each child at most once a week (daily ops: Mondays). It reads the child's reports since the last review and its outcome number.
-- For each Order it keeps, changes or retires it. It changes one only on or after its read date, or early when the stop rule or a P0 fires. Every change is a line in Changes with the reason.
-- It answers the child's Orders requests.
-- A monthly loop doesn't supervise a daily one: it reads too rarely to steer it. The strategy loop sits beside daily ops, both under you. An approved bet becomes an Order on the loop that owns its test, written the day it's approved.
+- It reviews each loop it supervises at most once a week (daily ops: Mondays), reading the loop's reports since the last review and the number each Order moves.
+- For each Order it keeps, changes or retires it. It changes one only on or after its read date, or early when its stop rule or a P0 fires, so a test gets its full window. Every change is a line in Changes with the reason.
+- It answers every Orders request.
+- An Order that loosens a hard limit or reaches an X surface is X: it goes to you.
+- A monthly loop doesn't supervise a daily one, because it reads too rarely to steer it. A strategy loop sits beside daily ops, with neither supervising the other. An approved bet becomes an Order on the loop that owns its test, written the day it's approved.
 
-**Solo loops.** A loop only you read has supervisor `you` and no Orders file. Don't write one to look tidy.
+**The mission guard.** The marked blocks are the one part of a charter no agent should change, so a script with no model in it watches them. After your edit lands on the default branch, run `bin/mission-guard bless <charter>`. From then on:
+- The heartbeat runs `mission-guard check` daily, and alerts with the diff when a blessed charter's blocks differ on the default branch.
+- The loop that grades PRs runs `mission-guard pr` on each PR head before grading, and a hit makes the PR X whatever the grader concluded. That gives grading a floor the model can't talk itself out of. It's the same idea as path-based risk tiers, but it guards the sentences instead of the files.
 
-**The mission guard.** The marked blocks are the one part of a charter an agent shouldn't ever change, so a model-free script watches them. After you edit a charter, run `bin/mission-guard bless <charter>`. The heartbeat runs `mission-guard check` daily, which reads each blessed charter on its repo's origin default branch and alerts if a marked block differs.
+Managers that rewrite their workers' prompts aren't new. Paperclip's org chart has a prompt-evolving plugin, and Gas Town has a Mayor directing workers. What's different here is the split. The part that says what a loop is for is locked, and a script, not a model, enforces it. The part a manager may change goes through the same graded PR as code, with a read date and a reason on every line.
 
 ## Budgets
 
@@ -109,7 +112,7 @@ The test measures demand directly, with signups, replies or pre-orders, because 
 
 **Your part.** Approve, reject or defer each bet in the memo's "Founder decisions" section by its deadline. The dashboard lists open decision sections from your repos' `docs/` (`waiting.github.memo_roots` in `fleet.json`). Silence means undecided: the bet is carried to the next memo, never assumed approved. A bet that reopens a settled decision says which one and what's different this time.
 
-**After you decide.** An approved bet's test is filed the same day, as a queue line or an Order on the loop that owns the test ([Supervisors and Orders](#supervisors-and-orders)), and only the test gets built. On the read date, the next memo reports the number against the kill rule. A killed bet goes into [DECISIONS.md](DECISIONS.md) so it isn't proposed again in the same form. A bet that clears comes back with its next, bigger test. Only once the evidence is strong enough does it get built, as normal graded PRs, with money, identity and data surfaces still X.
+**After you decide.** An approved bet's test is filed the same day, as an Order on the loop that owns the test ([Supervisors and Orders](#supervisors-and-orders)), or a queue line when no loop owns it, and only the test gets built. On the read date, the next memo reports the number against the kill rule. A killed bet goes into [DECISIONS.md](DECISIONS.md) so it isn't proposed again in the same form. A bet that clears comes back with its next, bigger test. Only once the evidence is strong enough does it get built, as normal graded PRs, with money, identity and data surfaces still X.
 
 Example of one bet in a memo (an imaginary product):
 

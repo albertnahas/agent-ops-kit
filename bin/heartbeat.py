@@ -10,7 +10,7 @@ Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY
 called with a subject and a body; unset, it prints them), then logs its own pass line. If
 $AGENT_OPS_DIR is a git repo with a remote, it commits and pushes, so a second watchman in the
 cloud can check that line is fresh (examples/heartbeat-watch-prompt.md)."""
-import datetime as dt, json, os, shlex, subprocess
+import datetime as dt, json, os, re, shlex, subprocess
 from pathlib import Path
 
 OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops"))
@@ -53,7 +53,9 @@ for loop, rs in by_loop.items():
 
 guard = subprocess.run([str(Path(__file__).with_name("mission-guard")), "check"], capture_output=True, text=True)
 if guard.returncode:
-    alerts["mission:drift"] = "Charter mission blocks changed without a bless:\n" + guard.stdout.strip()
+    drifts = re.split(r"\n(?=\S)", guard.stdout.strip())[:-1] or [(guard.stderr or guard.stdout).strip()[-500:]]
+    for d in drifts:
+        alerts[f"mission:{d.split(':', 1)[0]}"] = "A charter's mission blocks changed without your bless. Revert it, or bless it if it was you:\n" + d
 
 since = lambda days: (now - dt.timedelta(days=days)).isoformat()
 cost = lambda rs, days: sum(r.get("cost") or 0 for r in rs if "check" not in r and r["date"] >= since(days))
