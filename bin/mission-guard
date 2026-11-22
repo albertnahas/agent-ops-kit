@@ -7,7 +7,9 @@ mission-guard check            alert when a recorded charter's blocks changed on
 mission-guard pr               run in a PR checkout: exit 1 if it changes any file's mission blocks, 2 if it can't tell
 
 State lives in $AGENT_OPS_DIR/missions.json (default ~/.agent-ops). Push your own edit, then bless it.
-The heartbeat runs check. The loop that grades PRs runs pr on each head (it needs no state, so a copy\nof this file in the product repo works in the cloud) and grades any non-zero exit X, whatever the model thinks."""
+The heartbeat runs check. The loop that grades PRs runs pr on each head (it needs no state, so a copy of
+this file in the product repo works in the cloud; run the default branch's copy, never the PR's) and
+grades any non-zero exit X, whatever the model thinks."""
 import datetime as dt, difflib, json, os, re, subprocess, sys
 from pathlib import Path
 
