@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Model-free guard for the protected parts of a charter: the text inside its mission markers,
+an HTML comment line `mission` to open a block and `/mission` to close it.
+
+mission-guard bless <file>...  record each charter's marked blocks as they are on its repo's default branch
+mission-guard check            alert when a recorded charter's blocks changed on the default branch since its bless
+mission-guard pr               run in a PR checkout: exit 1 if it changes mission blocks or a protected path, 2 if it can't tell
+mission-guard orders           run in an Orders PR checkout: exit 1 unless it only edits docs/orders/ files, one Changes line each
+
+State lives in $AGENT_OPS_DIR/missions.json (default ~/.agent-ops). Push your own edit, then bless it.
+The heartbeat runs check. The loop that grades PRs runs pr on each head (it needs no state, so a copy of
+this file in the product repo works in the cloud; run the default branch's copy, never the PR's) and
+grades any non-zero exit X, whatever the model thinks."""
+import datetime as dt, difflib, json, os, re, subprocess, sys
+from pathlib import Path
+
+OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops"))
+STORE = OPS / "missions.json"
+OPEN = "<!-- mission -->"
+MARKER = re.compile(r"^[ \t]*(<!-- /?mission -->)[ \t]*$", re.M)
+ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
+def blocks(text):
+    """The marked blocks, or an error string when the markers don't pair up."""
+    out, start = [], None
+    for m in MARKER.finditer(text):
+        if (m.group(1) == OPEN) == (start is not None):
+            return f"unpaired {m.group(1)} at line {text.count(chr(10), 0, m.start()) + 1}"
+        if m.group(1) == OPEN:
+            start = m.end()
+        else:
+            out.append(text[start:m.start()].strip())
+            start = None
+    return "unclosed mission block" if start is not None else out
+
+
+def git(repo, *args):
+    try:
+        return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, env=ENV, timeout=60)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args, 124, "", "timed out")
+
+
+def default_branch(repo):
+    """(origin's default branch, None) after a fetch, or (None, why not)."""
+    if git(repo, "fetch", "-q", "origin").returncode:
+        return None, "fetch failed"
+    branch = re.search(r"ref: refs/heads/(\S+)\s+HEAD", git(repo, "ls-remote", "--symref", "origin", "HEAD").stdout)
+    return (branch.group(1), None) if branch else (None, "can't read origin's default branch")
+
+
+def default_text(repo, rel):
+    """(text of the file on origin's default branch, None) or (None, why not)."""
+    branch, why = default_branch(repo)
+    if why:
+        return None, why
+    shown = git(repo, "show", f"origin/{branch}:{rel}")
+    return (shown.stdout, None) if shown.returncode == 0 else (None, f"missing on origin/{branch}")
+
+
+def load():
+    try:
+        return json.loads(STORE.read_text()) if STORE.exists() else {}
+    except json.JSONDecodeError as e:
+        sys.exit(f"{STORE} is not valid JSON ({e}). Fix it or bless your charters again.")
+
+
+def diff(old, new):
+    lines = [l for l in list(difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=0))[2:] if l[:1] in "+-"]
+    return "\n".join("    " + l for l in lines[:8])
+
+
+def bless(files):
+    store, found = load(), {}
+    for f in files:
+        p = Path(f).expanduser().resolve()
+        top = git(str(p.parent), "rev-parse", "--show-toplevel").stdout.strip() if p.is_file() else ""
+        if not top:
+            return f"{f}: not a file in a git repo"
+        rel = str(p.relative_to(Path(top).resolve()))
+        local = blocks(p.read_text())
+        if isinstance(local, str) or not local:
+            return f"{f}: {local or 'no mission blocks'}"
+        remote, why = default_text(top, rel)
+        if why:
+            return f"{f}: {why}"
+        if blocks(remote) != local:
+            return f"{f}: its mission blocks differ from origin's default branch. Push first, then bless."
+        found[str(p)] = {"repo": top, "rel": rel, "blocks": local, "blessed": dt.date.today().isoformat()}
+    store.update(found)
+    OPS.mkdir(parents=True, exist_ok=True)
+    STORE.write_text(json.dumps(store, indent=2) + "\n")
+    print("\n".join(f"blessed {p}" for p in found))
+
+
+def check():
+    """Prints `drift: <path>` (with the diff) or `unreadable: <path>: <why>` per charter.
+    Exits 1 on any drift, else 2 if any charter couldn't be read, else 0."""
+    store, drift, unread = load(), 0, 0
+    for path, e in store.items():
+        text, why = default_text(e["repo"], e["rel"])
+        now = why or blocks(text)
+        if now == e["blocks"]:
+            continue
+        if why and why.startswith("missing on"):
+            drift += 1
+            print(f"drift: {path}: {why}, deleted since the bless on {e['blessed']}")
+        elif why:
+            unread += 1
+            print(f"unreadable: {path}: {why}")
+        elif isinstance(now, str):
+            drift += 1
+            print(f"drift: {path}: {now} since the bless on {e['blessed']}")
+        else:
+            drift += 1
+            print(f"drift: {path}: changed since the bless on {e['blessed']}\n{diff(chr(10).join(e['blocks']), chr(10).join(now))}")
+    print(f"{len(store) - drift - unread} of {len(store)} charters clean")
+    return 1 if drift else 2 if unread else 0
+
+
+PROTECTED = (".claude/agents/", ".claude/hooks/", ".claude/settings.json", ".github/workflows/",
+             "scripts/mission-guard", "bin/mission-guard", ".mission-guard")
+
+
+def checkout():
+    """(repo top, default branch, files this checkout changes against it), or exit 2: can't tell is X."""
+    top = git(".", "rev-parse", "--show-toplevel").stdout.strip()
+    branch, why = default_branch(top) if top else (None, "not inside a git checkout")
+    if why:
+        print(f"{why}: can't tell, treat the PR as X")
+        sys.exit(2)
+    changed = git(top, "diff", "--name-only", "--no-renames", f"origin/{branch}").stdout.split("\n") + \
+        git(top, "ls-files", "--others", "--exclude-standard").stdout.split("\n")
+    return top, branch, sorted(f for f in set(changed) if f)
+
+
+def pr():
+    """Store-free, so it works wherever the PR is checked out, a CI job included. Flags a change to any
+    file's mission blocks, and any change to a protected path: the grader, hooks, CI workflows, the guard
+    itself, and the paths listed in `.mission-guard` on the default branch. Exits 1 on a hit (grade X),
+    2 if it can't tell (treat as X), 0 if none."""
+    top, branch, changed = checkout()
+    base = lambda rel: git(top, "show", f"origin/{branch}:{rel}")
+    extra = base(".mission-guard").stdout.split() if base(".mission-guard").returncode == 0 else []
+    grep = lambda *ref: git(top, "grep", "-lE", r"^[[:space:]]*<!-- /?mission -->[[:space:]]*$", *ref).stdout.splitlines()
+    charters = set(grep()) | {f.split(":", 1)[1] for f in grep(f"origin/{branch}")}
+    hits = [f"{rel}: a protected path. Grade X." for rel in changed if rel.startswith(PROTECTED + tuple(extra))]
+    for rel in sorted(charters):
+        f, b = Path(top) / rel, base(rel)
+        if (blocks(f.read_text()) if f.is_file() else "deleted") != (blocks(b.stdout) if b.returncode == 0 else "new"):
+            hits.append(f"{rel}: this checkout changes its mission blocks. Grade X.")
+    print("\n".join(hits + [f"{len(hits)} hit(s) across {len(charters)} charter(s) and {len(changed)} changed file(s)"]))
+    return 1 if hits else 0
+
+
+def orders():
+    """For a PR that changes Orders: it may change only files under docs/orders/, and each one gains exactly
+    one line under its Changes heading and loses none there. Exits 1 if not, 2 if it can't tell."""
+    top, branch, changed = checkout()
+    log = lambda text: text.split("## Changes", 1)[1].splitlines() if "## Changes" in text else []
+    bad = []
+    for rel in changed:
+        if not re.fullmatch(r"docs/orders/[^/]+\.md", rel):
+            bad.append(f"{rel}: not an Orders file")
+            continue
+        b, f = git(top, "show", f"origin/{branch}:{rel}"), Path(top) / rel
+        old, new = log(b.stdout if b.returncode == 0 else ""), log(f.read_text() if f.is_file() else "")
+        delta = [l for l in difflib.ndiff(old, new) if l[:2] in ("+ ", "- ")]
+        added = [l for l in delta if l.startswith("+ ") and l[2:].strip() and l[2:].strip() != "date | why | by"]
+        if any(l.startswith("- ") and l[2:].strip() for l in delta) or len(added) != 1:
+            bad.append(f"{rel}: needs exactly one new Changes line and no removed ones ({len(added)} added)")
+    print("\n".join(bad + [f"{len(changed)} file(s) checked, {len(bad)} problem(s)"]))
+    return 1 if bad or not changed else 0
+
+
+cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
+if cmd == "bless" and args:
+    sys.exit(bless(args))
+if cmd in ("check", "pr", "orders") and not args:
+    sys.exit({"check": check, "pr": pr, "orders": orders}[cmd]())
+sys.exit("usage: mission-guard bless <file>... | mission-guard check | mission-guard pr | mission-guard orders")
