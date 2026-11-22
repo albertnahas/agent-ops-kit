@@ -2,18 +2,24 @@
 """The night watchman. No LLM, so little can break. Run it daily from cron or launchd.
 
 Reads $AGENT_OPS_DIR/runs.jsonl (written by claude-run and ops-check) and alerts when a loop:
-- failed its last outcome check (or, with no check, its last Claude run didn't end in success)
+- failed its last outcome check (or, with no check, its last Claude run crashed: not success, a non-zero exit, or is_error)
 - went silent: no run for twice its usual gap
 - cost over 3x its median on the last run
 Also runs bin/mission-guard check and alerts when a blessed charter's marked blocks drifted.
 Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY (a command
 called with a subject and a body; unset, it prints them), then logs its own line: pass, or fail
 when the notifier failed. If $AGENT_OPS_DIR is itself a git repo with a remote, it commits
-runs.jsonl and COSTS.md, nothing else, and pushes (runs.jsonl merges as a union, so two writers
+runs.jsonl, COSTS.md and what hooks name, nothing else, and pushes (runs.jsonl merges as a union, so two writers
 never conflict), so a second watchman in the cloud can check that line is fresh
 (examples/heartbeat-watch-prompt.md); a failed sync logs a fail line and leaves local edits as they were.
 A ledger line that isn't a run (no loop name, a date that isn't one or is in the future, bytes that aren't
-UTF-8) is skipped with an alert, never a crash."""
+UTF-8) is skipped with an alert, never a crash.
+
+Hooks: each executable in $AGENT_OPS_DIR/heartbeat.d runs in name order after the built-in checks, with
+{"alerts": {key: message}, "runs": [...]} on stdin, and prints {"alerts": {...}, "commit": [paths]}: the alerts
+from here on (so a hook can add, replace or drop them) and any files it wrote that the sync should commit. A hook
+that fails or prints anything else leaves the alerts as they were and adds one of its own. The notifier also gets
+the due alerts as JSON on stdin, so a router can send each to its own place by key."""
 import datetime as dt, json, os, re, shlex, subprocess
 from pathlib import Path
 
@@ -50,13 +56,14 @@ for r in runs:
     if r["loop"] != "heartbeat":
         by_loop.setdefault(r["loop"], []).append(r)
 median = lambda xs: sorted(xs)[len(xs) // 2]
+crashed = lambda r: r.get("subtype") != "success" or bool(r.get("exit") or r.get("is_error"))  # a crash can still say success
 
 for loop, rs in by_loop.items():
     checks = [r for r in rs if "check" in r]
     claude = [r for r in rs if "check" not in r]
     if checks and checks[-1]["check"] != "pass":
         alerts[f"check:{loop}"] = f"{loop}: outcome check failed: {checks[-1].get('detail')}"
-    elif not checks and claude[-1].get("subtype") != "success":
+    elif not checks and crashed(claude[-1]):
         last = claude[-1]
         alerts[f"run:{loop}"] = f"{loop}: last run ended as {last.get('subtype')} (exit {last.get('exit')})."
     times = [r["at"] for r in (checks or claude)]
@@ -77,13 +84,31 @@ for item in re.split(r"\n(?=\S)", guard.stdout.strip()):
 if guard.returncode and not re.search(r"^(drift|unreadable): ", guard.stdout, re.M):
     alerts["mission-guard"] = "mission-guard failed, so no charter is guarded right now: " + (guard.stderr or guard.stdout).strip()[-400:]
 
+def hook(path):
+    """A hook's alerts and files to commit, or None and why it failed."""
+    context = json.dumps({"alerts": alerts, "runs": [{**r, "at": f"{r['at']:%FT%T}"} for r in runs]})
+    try: out = subprocess.run([str(path)], input=context, capture_output=True, text=True, timeout=900, env={**os.environ, "AGENT_OPS_DIR": str(OPS)})
+    except (OSError, subprocess.TimeoutExpired) as e: return None, str(e)[:300]
+    try:
+        res = json.loads(out.stdout); files = res.get("commit", [])
+        if not out.returncode and all(isinstance(k, str) and isinstance(v, str) for k, v in res["alerts"].items()) and all(isinstance(f, str) for f in files):
+            return (res["alerts"], files), None
+    except (ValueError, TypeError, KeyError, AttributeError): pass
+    return None, f"exited {out.returncode}: {(out.stderr or out.stdout).strip()[-300:]}"
+
+commit = [LEDGER.name, "COSTS.md"]
+for path in sorted(p for p in (OPS / "heartbeat.d").glob("*") if p.is_file() and os.access(p, os.X_OK)):
+    res, why = hook(path)
+    if res: alerts, commit = res[0], commit + res[1]
+    else: alerts[f"hook:{path.name}"] = f"The heartbeat hook {path.name} failed, so its checks didn't run: {why}"
+
 since = lambda days: now - dt.timedelta(days=days)
 cost = lambda rs, days: sum(r.get("cost") or 0 for r in rs if "check" not in r and r["at"] >= since(days))
-failed = lambda r: r.get("check") == "fail" or ("check" not in r and r.get("subtype") != "success")
-rows = ["| loop | runs 7d | failed 7d | cost 7d | cost 30d | last run |", "|---|---|---|---|---|---|"]
+failed = lambda r: r.get("check") == "fail" or ("check" not in r and crashed(r))
+rows = ["| loop | runs 7d | failed 7d | denied calls 7d | cost 7d | cost 30d | last run |", "|---|---|---|---|---|---|---|"]
 for loop, rs in sorted(by_loop.items(), key=lambda kv: -cost(kv[1], 30)):
     week = [r for r in rs if r["at"] >= since(7)]
-    rows.append(f"| {loop} | {len(week)} | {sum(map(failed, week))} | ${cost(rs, 7):.2f} | ${cost(rs, 30):.2f} | {rs[-1]['at']:%Y-%m-%dT%H:%M} |")
+    rows.append(f"| {loop} | {len(week)} | {sum(map(failed, week))} | {sum(r.get('denials') or 0 for r in week)} | ${cost(rs, 7):.2f} | ${cost(rs, 30):.2f} | {rs[-1]['at']:%Y-%m-%dT%H:%M} |")
 OPS.mkdir(parents=True, exist_ok=True)
 (OPS / "COSTS.md").write_text(f"# Loop runs and cost\n\nUpdated {now:%Y-%m-%d %H:%M} by heartbeat.py. Cost is Claude's API-equivalent estimate; paid APIs a loop calls are not in it.\n\n" + "\n".join(rows) + "\n")
 
@@ -95,7 +120,7 @@ if due:
     subject, body = f"{len(due)} loop alert(s)", "\n\n".join(due.values())
     notify = os.environ.get("AGENT_OPS_NOTIFY")
     try:
-        sent = subprocess.run([*shlex.split(notify), subject, body] if notify else ["printf", "%s\n\n%s\n", subject, body], stderr=subprocess.PIPE, text=True)
+        sent = subprocess.run([*shlex.split(notify), subject, body] if notify else ["printf", "%s\n\n%s\n", subject, body], input=json.dumps(due), stderr=subprocess.PIPE, text=True)
         undelivered = sent.returncode and f"the notifier exited {sent.returncode}: {sent.stderr.strip()[-200:]}"
     except (OSError, ValueError) as e:  # a notifier that won't start, or AGENT_OPS_NOTIFY that won't parse
         undelivered = f"the notifier didn't start: {e}"
@@ -115,7 +140,7 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     if "runs.jsonl merge=union" not in (attrs.read_text() if attrs.exists() else ""):
         attrs.parent.mkdir(exist_ok=True)
         with attrs.open("a") as f: f.write("runs.jsonl merge=union\n")
-    git("add", "--", LEDGER.name, "COSTS.md"); git("commit", "-qm", f"heartbeat {now:%F}")  # only these: state and outputs stay local
+    git("add", "--", *commit); git("commit", "-qm", f"heartbeat {now:%F}")  # only these: other edits stay local
     head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
     clash = not sync.returncode and git("ls-files", "-u").stdout  # the pull went through, but local edits clash with it
     if clash: git("reset", "-q", "--hard", head); git("stash", "pop", "-q")  # so put the tree back as it was

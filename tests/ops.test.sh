@@ -30,7 +30,7 @@ expect "heartbeat flags the silent loop" "jq -e '.alerts | index(\"silent:quiet\
 expect "heartbeat flags the costly run" "jq -e '.alerts | any(startswith(\"cost:pricey\"))' <<<'$out' >/dev/null"
 expect "heartbeat leaves the healthy loop alone" "! jq -e '.alerts | any(contains(\"good\"))' <<<'$out' >/dev/null"
 expect "heartbeat flags malformed ledger lines and keeps going" "jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 2' <<<'$out' >/dev/null"
-expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | \\\$15.00' $AGENT_OPS_DIR/COSTS.md"
+expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | 0 | \\\$15.00' $AGENT_OPS_DIR/COSTS.md"
 expect "heartbeat logs its own pass line" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\": \"heartbeat\"'"
 expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
 h=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 1)\",\"check\":\"fail\"}" > "$h/runs.jsonl"; AGENT_OPS_DIR=$h bin/heartbeat.py >/dev/null
@@ -45,6 +45,19 @@ j=$(mktemp -d)
   echo "{\"loop\":\"c\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":\"lots\"}"; printf 'nul\0 and \303(\n'; printf '{"loop":"cut","date":"2026-11-0'; } > "$j/runs.jsonl"
 expect "heartbeat skips junk lines with an alert and logs its own line apart" "AGENT_OPS_DIR=$j bin/heartbeat.py | tail -1 | jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 5' >/dev/null && tail -1 $j/runs.jsonl | jq -e '.loop == \"heartbeat\"' >/dev/null"
 rm -rf "$j"
+# hooks in heartbeat.d filter the alerts and name files to commit; a broken one is an alert, never a crash; the notifier gets the due alerts by key
+k=$(mktemp -d); mkdir "$k/heartbeat.d"
+{ echo "{\"loop\":\"crashed-ok\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"exit\":1}"; echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}"; } > "$k/runs.jsonl"
+printf '#!/usr/bin/env python3\nimport json, sys\nc = json.load(sys.stdin)\na = {k: v for k, v in c["alerts"].items() if not k.startswith("check:")}\na["seen"] = str(len(c["runs"]))\nprint(json.dumps({"alerts": a, "commit": ["EXTRA.md"]}))\n' > "$k/heartbeat.d/10-filter"
+printf '#!/bin/sh\necho not json\n' > "$k/heartbeat.d/20-broken"; printf '#!/bin/sh\nexit 3\n' > "$k/heartbeat.d/30-ignored"
+chmod +x "$k/heartbeat.d/10-filter" "$k/heartbeat.d/20-broken"
+o=$(AGENT_OPS_DIR=$k AGENT_OPS_NOTIFY="sh -c 'cat > $k/due.json' n" bin/heartbeat.py | tail -1)
+expect "heartbeat counts a run that says success but exited non-zero as crashed" "jq -e '.alerts | index(\"run:crashed-ok\")' <<<'$o' >/dev/null"
+expect "a heartbeat hook drops and adds alerts" "jq -e '.alerts | (index(\"check:x\") | not) and index(\"seen\")' <<<'$o' >/dev/null"
+expect "a broken hook is an alert and leaves the alerts as they were" "jq -e '.alerts | index(\"hook:20-broken\") and index(\"seen\")' <<<'$o' >/dev/null"
+expect "a hook that isn't executable doesn't run" "! jq -e '.alerts | index(\"hook:30-ignored\")' <<<'$o' >/dev/null"
+expect "the notifier gets the due alerts by key on stdin" "jq -e 'has(\"seen\") and has(\"run:crashed-ok\")' $k/due.json >/dev/null"
+rm -rf "$k"
 for n in false /no/such/notifier "'unclosed"; do j=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" > "$j/runs.jsonl"
   expect "a notifier that fails ($n) makes the heartbeat's own line a fail" "AGENT_OPS_DIR=$j AGENT_OPS_NOTIFY=\"$n\" bin/heartbeat.py >/dev/null 2>&1; tail -1 $j/runs.jsonl | jq -e '.check == \"fail\" and (.detail | contains(\"notifier\"))' >/dev/null"; rm -rf "$j"; done
 
@@ -62,6 +75,9 @@ g2 "$r/b" pull -q; echo '{"b":1}' > "$r/b/missions.json"; g2 "$r/b" commit -qam 
 expect "local edits that clash with the remote fail the sync and stay as they were" "AGENT_OPS_DIR=$r/a GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null; tail -1 $r/a/runs.jsonl | grep -q 'clash with the remote' && [ \"\$(cat $r/a/missions.json)\" = '{\"x\":1}' ] && [ -z \"\$(g2 $r/a ls-files -u)\$(g2 $r/a stash list)\" ]"
 mkdir -p "$r/a/inner/.git"; echo '{"loop":"i","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/inner/runs.jsonl"; head=$(g2 "$r/a" rev-parse HEAD)
 expect "an empty .git inside never commits the enclosing repo" "AGENT_OPS_DIR=$r/a/inner bin/heartbeat.py >/dev/null && [ \$(g2 $r/a rev-parse HEAD) = $head ]"
+mkdir "$r/c" && git init -q --bare "$r/c/o.git" && git clone -q "$r/c/o.git" "$r/c/w" 2>/dev/null && mkdir "$r/c/w/heartbeat.d"
+printf '#!/bin/sh\necho made > "$AGENT_OPS_DIR/EXTRA.md"; echo "{\\"alerts\\": {}, \\"commit\\": [\\"EXTRA.md\\"]}"\n' > "$r/c/w/heartbeat.d/board"; chmod +x "$r/c/w/heartbeat.d/board"
+expect "the sync commits the files a hook names" "AGENT_OPS_DIR=$r/c/w GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null && [ \"\$(g2 $r/c/w show --name-only --format= HEAD | sort | tr '\\n' ' ')\" = 'COSTS.md EXTRA.md runs.jsonl ' ]"
 rm -rf "$r"
 
 # mission-guard: bless what's on the default branch (master here, to prove it isn't assumed), then catch drift
