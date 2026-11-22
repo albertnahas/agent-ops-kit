@@ -1,0 +1,56 @@
+{
+ "corners": "10px",
+ "dark": {
+  "bad": "#f47174",
+  "border": "#2b3b58",
+  "card": "#141d31",
+  "charts": [
+   "#8b85ff",
+   "#4cb4f0",
+   "#3cc7b2",
+   "#f3a467",
+   "#cf86e8",
+   "#94a3b8",
+   "#e8c55c",
+   "#f08aa8"
+  ],
+  "good": "#34c77b",
+  "ground": "#060a13",
+  "muted": "#94a3b8",
+  "text": "#eef2f8",
+  "warning": "#f0b429"
+ },
+ "fonts": {
+  "display": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+  "text": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
+ },
+ "light": {
+  "bad": "#c0272d",
+  "border": "#d2d9e3",
+  "card": "#ffffff",
+  "charts": [
+   "#635bff",
+   "#0a8fdc",
+   "#0b9e8a",
+   "#e8833a",
+   "#b04dd1",
+   "#5b6b80",
+   "#d4a72c",
+   "#e0517a"
+  ],
+  "good": "#0b7a43",
+  "ground": "#e9edf3",
+  "muted": "#4b5b70",
+  "text": "#0a2540",
+  "warning": "#9a5b00"
+ },
+ "sizes": {
+  "body": "14px",
+  "caption": "12px",
+  "heading": "15px",
+  "title": "22px"
+ },
+ "system": {
+  "name": "Console"
+ }
+}
