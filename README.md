@@ -81,7 +81,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
 | `checks/report-landed.sh` | Example check: today's report landed, on main or its PR branch, with every section. Write one per loop; it's the only definition of "done" that doesn't trust the agent. |
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop, a run over 3x its usual cost or a charter's mission blocks changing, at most every 3 days per alert. Writes `COSTS.md`. |
-| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes; `pr` makes a PR that changes it, or the guard itself, X. |
+| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes; `pr` makes a PR that changes it, the guard, the grader, hooks or CI workflows X; `orders` checks an Orders-only PR. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
 | `fleet/` | The fleet dashboard: `fleet.py` builds `loops.json`, `waiting.json` and `dashboard.html`; `README.md` says what it reads and how each status is decided; `SYNC.md` puts it on claude.ai with your cloud routines. |
