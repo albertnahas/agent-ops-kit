@@ -265,6 +265,7 @@ const URGENT = ['failing', 'silent', 'unregistered', 'chronic', 'stale'];
 const GAPS = ['no check', 'no runs yet'];
 /* the project picked at the top: every count, list and tab shows its rows only; '' is all of them */
 const scoped = (rows, {project} = dash.params()) => rows.filter((r) => !project || r.scope === project);
+const checkers = (r) => r.checked_by ? r.checked_by.split(', ') : [];
 const LABEL = {failing: 'Failing', silent: 'Silent', unregistered: 'Unregistered', chronic: 'Flaky', stale: 'Stale data',
   'no check': 'Unchecked', 'no runs yet': 'Not run yet', healthy: 'Healthy', paused: 'Paused', service: 'Running', 'one-off': 'One-off'};
 const TONE = {failing: 'bad', silent: 'bad', unregistered: 'warn', chronic: 'warn', stale: 'warn', 'no check': 'none', 'no runs yet': 'none',
@@ -587,11 +588,11 @@ dash.draw('svc-count', (e) => {
 const factoryGraph = (rows) => {
   const all = new Map(rows.filter((r) => !NOT_LOOP.includes(r.project)).map((r) => [r.loop, r]));
   const mine = scoped([...all.values()]), loops = [...mine], keep = new Set(loops.map((r) => r.loop));
-  for (let k = 0; k < loops.length; k++) [...(loops[k].checked_by || []), loops[k].supervisor].forEach((c) => { if (all.has(c) && !keep.has(c)) { keep.add(c); loops.push(all.get(c)); } });
+  for (let k = 0; k < loops.length; k++) [...checkers(loops[k]), loops[k].supervisor].forEach((c) => { if (all.has(c) && !keep.has(c)) { keep.add(c); loops.push(all.get(c)); } });
   const nodes = new Map(loops.map((r) => [r.loop, {id: r.loop, kind: 'loop', row: r}]));
   const edges = [];
   loops.forEach((r) => {
-    const to = (r.checked_by || []).filter((c) => c !== r.loop);
+    const to = checkers(r).filter((c) => c !== r.loop);
     (to.length ? to : ['nobody']).forEach((c) => {
       if (!nodes.has(c)) nodes.set(c, {id: c, kind: ['you', 'nobody'].includes(c) ? c : 'ext', service: rows.some((x) => x.loop === c && x.project === 'Service')});
       edges.push({from: r.loop, to: c, i: edges.length});
