@@ -18,15 +18,15 @@ day() { date -v-"$1"d +%FT10:00:00 2>/dev/null || date -d "$1 days ago" +%FT10:0
 cat > "$AGENT_OPS_DIR/REGISTRY.md" <<EOF
 ## Registry
 
-| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by |
-|---|---|---|---|---|---|---|---|
-| good | Shop | cloud | routine:good | daily | | | you |
-| broken | Shop | cloud | routine:broken | daily | | | good, heartbeat |
-| flaky |  | cloud | routine:flaky | daily | | | you |
-| fresh | Blog | cloud | routine:fresh | daily | | | you |
-| reader | Blog | cloud | routine:reader-job | daily | | | routine:good, YOU, flaky, you, reader-job |
-| lonely | Blog | cloud | routine:lonely | daily | | | |
-| watched | Blog | cloud | routine:watched | daily | | | com.me.build |
+| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by | Supervisor |
+|---|---|---|---|---|---|---|---|---|
+| good | Shop | cloud | routine:good | daily | | | you | You |
+| broken | Shop | cloud | routine:broken | daily | | | good, heartbeat | good |
+| flaky |  | cloud | routine:flaky | daily | | | you | flaky |
+| fresh | Blog | cloud | routine:fresh | daily | | | you | ghost |
+| reader | Blog | cloud | routine:reader-job | daily | | | routine:good, YOU, flaky, you, reader-job | routine:watched |
+| lonely | Blog | cloud | routine:lonely | daily | | | |  |
+| watched | Blog | cloud | routine:watched | daily | | | com.me.build | reader |
 
 ## Services
 
@@ -57,6 +57,12 @@ expect "a ledger name with no row is unregistered" "[ \"\$(status stray)\" = unr
 expect "checked by is a list"                  "jq -e '.rows[] | select(.loop == \"broken\") | .checked_by == [\"good\", \"heartbeat\"]' $L >/dev/null"
 expect "checked by resolves jobs and you, once each" "jq -e '.rows[] | select(.loop == \"reader\") | .checked_by == [\"good\", \"you\", \"flaky\", \"reader\"]' $L >/dev/null"
 expect "a service's job names the service"   "jq -e '.rows[] | select(.loop == \"watched\") | .checked_by == [\"Build\"]' $L >/dev/null"
+sup() { jq -r --arg l "$1" '.rows[] | select(.loop == $l) | "\(.supervisor) | \(.supervisor_issue)"' "$L"; }
+expect "a supervisor is a loop or you"         "[ \"\$(sup broken)\" = 'good | null' ] && [ \"\$(sup good)\" = 'you | null' ]"
+expect "a supervisor's job names its loop"     "[ \"\$(sup reader | cut -d' ' -f1)\" = watched ]"
+expect "no supervisor is fine"                 "[ \"\$(sup lonely)\" = 'null | null' ]"
+expect "a missing supervisor is flagged"       "[ \"\$(sup fresh)\" = 'ghost | supervisor ghost is not a loop in the registry' ]"
+expect "supervision cycles are flagged"        "sup flaky | grep -q 'comes back to it: flaky → flaky' && sup reader | grep -q 'reader → watched → reader' && sup watched | grep -q 'watched → reader → watched'"
 expect "no checker is an empty list"           "jq -e '.rows[] | select(.loop == \"lonely\") | .checked_by == []' $L >/dev/null"
 expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
 expect "a project is its own scope"           "[ \"\$(scope good)\" = Shop ]"

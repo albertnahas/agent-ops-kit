@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the fleet dashboard from an invented fleet of 30 loops: every status, a checker chain three deep, two loops
-# that check each other, a checker the registry doesn't have and two loops nobody checks. For screenshots and proofs.
+# that check each other, a checker the registry doesn't have, two loops nobody checks and a supervision tree with one
+# missing parent. For screenshots and proofs.
 # Usage: tests/fleet-demo.sh [folder]   Prints the dashboard's path. Needs bash and python3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -10,6 +11,10 @@ echo "{\"launch_agents\": \"$AGENT_OPS_DIR/none\", \"refresh\": \"Demo data\"}" 
 # Most loops are cloud routines; two are desktop-app tasks, and one is a launchd job, which shows as paused (not loaded here).
 runtime() { case $1 in fleet-sync|life-review) echo app;; app-beta) echo mac;; *) echo cloud;; esac; }
 job() { case $(runtime "$1") in app) echo "task:$1";; mac) echo "com.demo.$1";; *) echo "routine:$1";; esac; }
+# Supervisors write their children's Orders: each daily ops loop runs its project, one row names a loop that doesn't
+# exist, and the rest have none.
+supervisor() { case $1 in *-daily-ops) ;; shop-*) echo shop-daily-ops;; blog-writer|blog-editor|blog-seo) echo blog-daily-ops;;
+  blog-links) echo blog-chief;; app-crash-triage|app-reviews|app-store-watch|app-release-notes) echo app-daily-ops;; esac; }
 day() { date -v-"$1"d +%FT0"$2":00:00 2>/dev/null || date -d "$1 days ago" +%FT0"$2":00:00; }
 
 loops=(
@@ -46,8 +51,8 @@ loops=(
   "life-review|Personal|you|-|0"
 )
 {
-  printf '## Registry\n\n| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by |\n|---|---|---|---|---|---|---|---|\n'
-  for l in "${loops[@]}"; do IFS='|' read -r name project by _ _ <<< "$l"; echo "| $name | $project | $(runtime "$name") | $(job "$name") | daily | | | $by |"; done
+  printf '## Registry\n\n| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by | Supervisor |\n|---|---|---|---|---|---|---|---|---|\n'
+  for l in "${loops[@]}"; do IFS='|' read -r name project by _ _ <<< "$l"; echo "| $name | $project | $(runtime "$name") | $(job "$name") | daily | | | $by | $(supervisor "$name") |"; done
   printf '\n## Services\n\n| Service | Job | What it is |\n|---|---|---|\n| Fleet build | com.demo.fleet-build | rebuilds the dashboard |\n'
 } > "$AGENT_OPS_DIR/REGISTRY.md"
 {

@@ -158,6 +158,10 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
 .fx-fedges path.bad { stroke: var(--color-bad); opacity: .7; }
 .fx-fedges path.warn { stroke: var(--color-warn); opacity: .6; }
 .fx-fedges path.gap { stroke: var(--color-bad); stroke-dasharray: 4 3; opacity: .75; }
+.fx-fedges path.sup { stroke: var(--fx-c3, var(--color-warn)); stroke-width: 1.75; stroke-dasharray: 1 4; stroke-linecap: round; opacity: .85; }
+.fx-fnode.sup-bad { outline: 1.5px dotted var(--color-warn); outline-offset: 2px; }
+.fx-fdetail p.warn { color: var(--color-warn); }
+.fx-legend i.sup { border-top: 2px dotted var(--fx-c3, var(--color-warn)); }
 .fx-fedges path.off { stroke-dasharray: 2 3; opacity: .3; }
 .fx-fedges path.flow { display: none; stroke: var(--fx-c0, var(--color-fg)); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0 14; opacity: .8; }
 .fx-factory.trace .fx-fnode:not(.on), .fx-factory.trace .fx-fproj { opacity: .28; }
@@ -242,6 +246,7 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
         <span><span class="fx-dot" data-tone="none"></span>Not run yet or paused</span>
         <span><i></i>Checked by</span>
         <span><i class="gap"></i>Nobody reads it</span>
+        <span id="legend-sup" hidden><i class="sup"></i>Writes its Orders</span>
       </div>
     </section>
   </section>
@@ -445,7 +450,7 @@ const go = (pane, filter) => {
   if (filter) { dash.draw('loop-filter'); dash.draw('loop-list'); dash.draw('loop-count'); }
 };
 const fxRoot = document.querySelector('.fx');
-[0, 1, 2, 4, 5].forEach((i) => fxRoot.style.setProperty('--fx-c' + i, dash.colors[i]));
+[0, 1, 2, 3, 4, 5].forEach((i) => fxRoot.style.setProperty('--fx-c' + i, dash.colors[i]));
 document.querySelectorAll('.fx-tab').forEach((t) => t.addEventListener('click', () => go(t.dataset.pane)));
 document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go, b.dataset.filter)));
 if (['loops', 'factory', 'waiting'].includes(location.hash.slice(1))) go(location.hash.slice(1));
@@ -582,7 +587,7 @@ dash.draw('svc-count', (e) => {
 const factoryGraph = (rows) => {
   const all = new Map(rows.filter((r) => !NOT_LOOP.includes(r.project)).map((r) => [r.loop, r]));
   const mine = scoped([...all.values()]), loops = [...mine], keep = new Set(loops.map((r) => r.loop));
-  for (let k = 0; k < loops.length; k++) (loops[k].checked_by || []).forEach((c) => { if (all.has(c) && !keep.has(c)) { keep.add(c); loops.push(all.get(c)); } });
+  for (let k = 0; k < loops.length; k++) [...(loops[k].checked_by || []), loops[k].supervisor].forEach((c) => { if (all.has(c) && !keep.has(c)) { keep.add(c); loops.push(all.get(c)); } });
   const nodes = new Map(loops.map((r) => [r.loop, {id: r.loop, kind: 'loop', row: r}]));
   const edges = [];
   loops.forEach((r) => {
@@ -623,7 +628,9 @@ const factoryGraph = (rows) => {
     const path = []; for (let n = 'you'; n != null; n = prev.get(n)) path.unshift(n);
     return path;
   };
-  return {nodes, edges, outs, ins, order, groups, chain, route, mine};
+  /* supervision: a loop's supervisor writes its Orders; you, implied, isn't drawn */
+  const sups = loops.filter((r) => r.supervisor && r.supervisor !== r.loop && nodes.get(r.supervisor)?.kind === 'loop').map((r, i) => ({from: r.supervisor, to: r.loop, i}));
+  return {nodes, edges, outs, ins, order, groups, chain, route, mine, sups};
 };
 const fname = (n) => n.kind === 'loop' ? nameOf(n.row) : n.kind === 'you' ? 'You' : n.kind === 'nobody' ? 'Nobody' : n.id;
 const fcurve = (x1, y1, x2, y2) => { const m = (x1 + x2) / 2; return `M${x1},${y1}C${m},${y1} ${m},${y2} ${x2},${y2}`; };
@@ -646,13 +653,14 @@ dash.draw('factory', (box) => {
     const b = el('button', 'fx-fnode' + (n.kind === 'loop' ? '' : n.kind === 'ext' ? ' ext' : ' fx-fend ' + n.kind)); b.type = 'button';
     const read = g.ins(n.id).length, gap = n.kind === 'loop' && g.outs(n.id).every((e) => e.to === 'nobody');
     if (gap) b.classList.add('gap');
+    if (n.kind === 'loop' && n.row.supervisor_issue) b.classList.add('sup-bad');
     const rt = n.kind === 'loop' && runtimeMark(n.row);
     if (n.kind === 'loop') { b.dataset.tone = TONE[n.row.status]; b.append(dot(TONE[n.row.status], LABEL[n.row.status])); }
     b.append(el('span', '', fname(n)));
     if (rt) b.append(rt);
     if (read) b.append(el('b', '', String(read)));
     b.setAttribute('aria-label', fname(n) + (n.kind === 'loop' ? ', ' + LABEL[n.row.status] + (rt ? ', ' + runtimeOf(n.row)[1] : '') : n.kind === 'ext' ? (n.service ? ', a service' : ', not in the registry') : '')
-      + (read ? ', reads ' + read : '') + (gap ? ', nobody reads it' : ''));
+      + (read ? ', reads ' + read : '') + (gap ? ', nobody reads it' : '') + (n.kind === 'loop' && n.row.supervisor_issue ? ', ' + n.row.supervisor_issue : ''));
     chips.set(n.id, b);
     return b;
   };
@@ -696,8 +704,16 @@ dash.draw('factory', (box) => {
         p.setAttribute('d', d); p.setAttribute('class', c); p.dataset.e = e.i; svg.append(p); paths.push(p);
       });
     });
+    g.sups.forEach((e) => {
+      const s = pos.get(e.from), t = pos.get(e.to), o = 5, k = 10;
+      const d = Math.abs(s.l - t.l) < 2 ? `M${s.l},${s.m + o}C${s.l - k},${s.m + o} ${t.l - k},${t.m + o} ${t.l},${t.m + o}`
+        : s.l > t.l ? fcurve(s.l, s.m + o, t.r, t.m + o) : fcurve(s.r, s.m + o, t.l, t.m + o);
+      const p = document.createElementNS(svg.namespaceURI, 'path');
+      p.setAttribute('d', d); p.setAttribute('class', 'sup'); p.dataset.s = e.i; svg.append(p); paths.push(p);
+    });
     box.prepend(svg);
   }
+  document.querySelectorAll('#legend-sup').forEach((e) => { e.hidden = !g.sups.length; });
 
   const say = (id) => {
     detail.replaceChildren(); detail.hidden = !id;
@@ -714,13 +730,18 @@ dash.draw('factory', (box) => {
     detail.append(el('p', '', g.outs(id).every((e) => e.to === 'nobody') ? 'Nobody reads its output.'
       : path ? 'Read by ' + by.join(', ') + (path.length > 3 ? '. Reaches you through ' + path.slice(1, -1).map((k) => fname(g.nodes.get(k))).join(' → ') : '') + '.'
       : 'Read by ' + by.join(', ') + ', but the chain never reaches you.'));
+    const sup = n.row.supervisor, kids = g.sups.filter((e) => e.from === id).map((e) => fname(g.nodes.get(e.to)));
+    if (sup) detail.append(el('p', '', 'Orders from ' + (sup === 'you' ? 'you' : g.nodes.has(sup) ? fname(g.nodes.get(sup)) : sup) + '.'));
+    if (kids.length) detail.append(el('p', '', 'Writes Orders for ' + kids.join(', ') + '.'));
+    if (n.row.supervisor_issue) detail.append(el('p', 'warn', n.row.supervisor_issue[0].toUpperCase() + n.row.supervisor_issue.slice(1) + '.'));
   };
   /* pointing only lights a chain; tapping also fills the card, so the page's height never moves under the pointer */
   const trace = (id, tell) => {
     const c = id ? g.chain(id) : {on: new Set(), via: new Set()};
+    const sup = new Set(g.sups.filter((e) => e.from === id || e.to === id).map((e) => { c.on.add(e.from); c.on.add(e.to); return e.i; }));
     box.classList.toggle('trace', !!id);
     chips.forEach((b, k) => { b.classList.toggle('on', c.on.has(k)); b.classList.toggle('sel', k === FX.fsel); b.setAttribute('aria-pressed', String(k === FX.fsel)); });
-    paths.forEach((p) => p.classList.toggle('on', c.via.has(+p.dataset.e)));
+    paths.forEach((p) => p.classList.toggle('on', 's' in p.dataset ? sup.has(+p.dataset.s) : c.via.has(+p.dataset.e)));
     if (tell) say(id);
   };
   chips.forEach((b, id) => {

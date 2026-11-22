@@ -33,7 +33,7 @@ Without a ledger, a launchd loop's last exit and the time its log file last chan
 
 ## Factory
 
-The Factory tab draws who checks what: every loop on the left, the loops and scripts that read other loops' output in the middle, and you on the right. A loop's **Checked by** cell draws its lines. A name there is a loop's or service's name or its job (with or without `routine:` or `task:`), or `you`; any other name shows as a checker that isn't in the registry. Loops with no checker run into **Nobody**, the gap to close. Tap or point at a loop to trace its chain both ways. With a project picked at the top, it draws that project's loops and every loop their output reaches, so each chain stays whole.
+The Factory tab draws who checks what: every loop on the left, the loops and scripts that read other loops' output in the middle, and you on the right. A loop's **Checked by** cell draws its lines. A name there is a loop's or service's name or its job (with or without `routine:` or `task:`), or `you`; any other name shows as a checker that isn't in the registry. Loops with no checker run into **Nobody**, the gap to close. Tap or point at a loop to trace its chain both ways. The optional **Supervisor** column adds dotted lines from each supervisor to the loops whose Orders it writes; a supervisor that isn't a loop, or a cycle, gets a dotted outline and says why when tapped. With a project picked at the top, it draws that project's loops and every loop their output reaches, so each chain stays whole.
 
 ## Config
 

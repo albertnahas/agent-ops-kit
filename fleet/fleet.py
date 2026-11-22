@@ -206,7 +206,8 @@ def build():
                "schedule": (reg.get("Schedule", "").replace(override.group(0), "") if override else reg.get("Schedule", "")).replace("`", "").strip(" ()"),
                "last_run": None, "result": None, "detail": "", "next_due": None,
                "pass_rate": None, "checks": None, "cost": None, "status": None,
-               "checked_by": [c.strip() for c in reg.get("Checked by", "").split(",") if c.strip()]}
+               "checked_by": [c.strip() for c in reg.get("Checked by", "").split(",") if c.strip()],
+               "supervisor": reg.get("Supervisor", "").strip() or None}
         spec, live, j = None, True, None
         if kind == "local":
             j = jobs.get(ref)
@@ -268,9 +269,18 @@ def build():
     # Checked by names a loop or service by its name or its job, with or without the routine:/task: prefix, or you;
     # any other name is kept as written, a checker the registry doesn't have.
     alias = {k: r["loop"] for r in rows for k in (r["job"], r["job"].partition(":")[2]) if k} | {r["loop"]: r["loop"] for r in rows}
-    for r in rows:
-        if "checked_by" in r:
-            r["checked_by"] = list(dict.fromkeys("you" if c.lower() == "you" else alias.get(c, c) for c in r["checked_by"]))
+    resolve = lambda c: "you" if c.lower() == "you" else alias.get(c, c)
+    loops = {r["loop"]: r for r in rows if "checked_by" in r}
+    for r in loops.values():
+        r["checked_by"] = list(dict.fromkeys(map(resolve, r["checked_by"])))
+        r["supervisor"] = r["supervisor"] and resolve(r["supervisor"])
+    # Supervisor, optional, is the one loop that writes this loop's Orders (or you). A parent that is no loop, or a
+    # chain that comes back to the row, is flagged on it.
+    for r in loops.values():
+        chain, up = [r["loop"]], r["supervisor"]
+        while up in loops and up not in chain: chain.append(up); up = loops[up]["supervisor"]
+        r["supervisor_issue"] = (f"supervisor {r['supervisor']} is not a loop in the registry" if r["supervisor"] not in {**loops, "you": 0, None: 0}
+                                 else "supervision comes back to it: " + " → ".join(chain + [up]) if up == r["loop"] else None)
 
     for label, j in jobs.items():
         if label in claimed or j["vendor"] or not j["loaded"]: continue
@@ -299,7 +309,7 @@ def build():
     of = scoping(registry)
     for r in rows: r["scope"] = of(r["project"])[1]
     keys = ["loop", "project", "scope", "runtime", "job", "schedule", "status", "last_run", "result", "detail",
-            "next_due", "pass_rate", "checks", "cost", "history", "checked_by"]
+            "next_due", "pass_rate", "checks", "cost", "history", "checked_by", "supervisor", "supervisor_issue"]
     rows = [{k: r.get(k) for k in keys} for r in rows]
 
     meta = [{"label": "Built", "value": now.isoformat(timespec="minutes")},
