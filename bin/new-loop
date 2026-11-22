@@ -33,7 +33,7 @@ INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "
            **{str(p.relative_to(KIT)): str(p.relative_to(KIT)) for d in (".claude/agents", ".claude/hooks")
               for p in sorted((KIT / d).iterdir())}}
 GENERIC = {"letter", "number", "journey", "file", "name", "n", "how", "what"}  # template words that stay as written
-cell = lambda v: str(v).replace("|", "\\|")  # a | inside a markdown table cell
+cell = lambda v: " ".join(str(v).split()).replace("|", "\\|")  # one line, with any | escaped, in a markdown table cell
 LEVEL = r"(at least|at most)\s+[\d,]*\.?\d+"
 GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:**\n- **Check:**\n"
         "<!-- /mission -->\n\n")  # #22's block, for a template that predates it
@@ -44,7 +44,7 @@ def args():
     p.add_argument("--reschedule", action="store_true", help="move an existing loop to a new schedule or runtime")
     spec = SPEC["new"] + SPEC["defaults"]
     for q in spec:
-        p.add_argument(f"--{q['id']}", help=q["help"], type={"number": float, "integer": int}.get(q["kind"], str),
+        p.add_argument(f"--{q['id']}", help=q["help"] + (f" Default: {q['default']}" if "default" in q else ""), type={"number": float, "integer": int}.get(q["kind"], str),
                        choices=[c["value"] for c in q.get("choices", [])] or None, action="append" if q.get("repeat") else "store",
                        default=[] if q.get("repeat") else None if "default" in q else "")
     a = p.parse_args()
@@ -57,11 +57,11 @@ def args():
     if missing:
         p.error("missing " + ", ".join(missing))
     a.repo = Path(a.repo or ".").expanduser().resolve()
-    a.name = a.name or re.sub(r"[^A-Za-z0-9_.-]+", "-", a.repo.name)
-    a.outcome = a.outcome or a.mission
+    a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", a.repo.name.lower()).strip("-.")
+    a.outcome = a.outcome or " ".join(a.mission.split())
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
-        p.error("--name is letters, digits, _ . and -, and not you or nobody")
+        p.error("--name is letters, digits, _ . and -, and not you or nobody; pass one when the repo's folder name gives none")
     if not a.reschedule and re.match(LEVEL, a.floor, re.I) and not a.measure:
         p.error("a measured --floor needs --measure, the command that reads it from --source")
     if not a.reschedule and not re.match(LEVEL, a.floor, re.I) and not a.floor.startswith("unmeasured: "):

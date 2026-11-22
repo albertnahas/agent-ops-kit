@@ -12,9 +12,9 @@
   ],
   "defaults": [
     {"id": "repo", "kind": "path", "required": false, "ask": "Which repo does the loop work on?", "help": "The local checkout. Default: the one you're in."},
-    {"id": "name", "kind": "text", "required": false, "ask": "What's the loop called?", "help": "Letters, digits, . _ and - only. Default: the repo's folder name."},
+    {"id": "name", "kind": "text", "required": false, "ask": "What's the loop called?", "help": "Letters, digits, . _ and - only. Default: the repo's folder name, lowercased."},
     {"id": "outcome", "kind": "text", "required": false, "mission": true, "ask": "What does it change in the world when it works?", "help": "One sentence. Default: the mission."},
-    {"id": "limits", "kind": "longtext", "required": false, "mission": true, "ask": "What must it never do?", "help": "With numbers: messages a day, money, who it may contact. Default as given.", "default": "Never message anyone outside this repo, never spend money, and never touch production data."},
+    {"id": "limits", "kind": "longtext", "required": false, "mission": true, "ask": "What must it never do?", "help": "With numbers: messages a day, money, who it may contact.", "default": "Never message anyone outside this repo, never spend money, and never touch production data."},
     {"id": "x-surface", "kind": "text", "required": false, "repeat": true, "mission": true, "ask": "What else here can't a revert undo?", "help": "Beyond money, data-dropping migrations, auth, secrets, new dependencies and paid APIs, which are already X. One per answer."},
     {"id": "supervisor", "kind": "text", "required": false, "ask": "Which loop supervises it?", "help": "A loop that already reads its output and writes its Orders. Most loops have none."},
     {"id": "checked-by", "kind": "text", "required": false, "ask": "Who reads its output after its check passes?", "help": "Loops by name, heartbeat or you, comma-separated. Default: its supervisor, else you."},
