@@ -110,19 +110,20 @@ rm -rf "$g"
 
 # mission-guard hardening: quoted paths, agent config, unpaired markers, Orders log lines, empty store, merge-base
 h=$(mktemp -d); git init -q --bare -b main "$h/o.git"; git clone -q "$h/o.git" "$h/w" 2>/dev/null; mkdir -p "$h/w/docs/orders"
-printf '<!-- mission -->\nNever merge X.\n<!-- /mission -->\n' > "$h/w/docs/C.md"; cp "$h/w/docs/C.md" "$h/w/docs/CHARTÉ.md"
+printf '<!-- mission -->\nNever merge X.\n<!-- /mission -->\n' > "$h/w/docs/C.md";
 printf '# Orders\n\nDo the thing.\n\n## Changes\n\ndate | why | by\n2026-11-01 | start | you\n' > "$h/w/docs/orders/a.md"
 hc() { git -C "$h/w" -c user.name=t -c user.email=t@t "$@"; }
 hc add -A && hc commit -qm base && hc push -q origin HEAD:main
 guard() { (cd "$h/w" && "$OLDPWD/bin/mission-guard" "$@" >/dev/null); echo $?; }
 reset() { hc checkout -q -f main && hc reset -q --hard origin/main && hc clean -qfd; hc checkout -q -B pr; }
-reset; echo hi > "$h/w/README.md"
-expect "mission-guard pr passes an unrelated PR next to a non-ASCII charter" "[ \$(guard pr) = 0 ]"
 for f in .github/workflows/é.yml .claude/settings.local.json .claude/skills/x/SKILL.md .claude/commands/x.md CLAUDE.md docs/CLAUDE.md .mcp.json .husky/pre-commit scripts/run.sh bin/claude-run bin/ops-check checks/report-landed.sh; do
   reset; mkdir -p "$h/w/$(dirname "$f")"; echo x > "$h/w/$f"; hc add -Af; hc commit -qm p
   expect "mission-guard pr protects $f" "[ \$(guard pr) = 1 ]"
 done
-reset; echo hi > "$h/w/README.md"; hc add -A; hc commit -qm r; hc checkout -q main; hc reset -q --hard origin/main
+reset; hc checkout -q main; cp "$h/w/docs/C.md" "$h/w/docs/CHARTÉ.md"; hc add -A; hc commit -qm uni; hc push -q origin HEAD:main
+reset; echo hi > "$h/w/README.md"
+expect "mission-guard pr passes an unrelated PR next to a non-ASCII charter" "[ \$(guard pr) = 0 ]"
+hc add -A; hc commit -qm r; hc checkout -q main; hc reset -q --hard origin/main
 printf '<!-- mission -->\nnever spend money\n' >> "$h/w/docs/C.md"; hc commit -qam unclosed; hc push -q origin HEAD:main
 hc checkout -q pr; hc rebase -q main; sed -i.b 's/never spend money/spend freely/; s/Never merge/Always merge/' "$h/w/docs/C.md"; rm "$h/w/docs/C.md.b"
 expect "mission-guard pr fails closed on an unclosed block on the default branch" "[ \$(guard pr) = 2 ]"
