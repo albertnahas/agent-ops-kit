@@ -26,7 +26,7 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-It adds the PR grader as an agent and puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, hooks and checks belong in your repo, so copy them in as below.
+It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader's Bash limit is a hook in its frontmatter, and Claude Code only runs that hook for an agent in your project's `.claude/agents/`.
 
 ## Try it in 5 minutes
 

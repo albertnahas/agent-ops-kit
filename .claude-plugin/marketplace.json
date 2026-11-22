@@ -9,7 +9,7 @@
     {
       "name": "agent-ops-kit",
       "source": "./",
-      "description": "The independent PR grader that grades every PR A, B, C or X against your charter's merge policy."
+      "description": "claude-run, ops-check and heartbeat.py on your path: a run ledger, outcome checks and a heartbeat for scheduled loops."
     }
   ]
 }

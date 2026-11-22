@@ -1,7 +1,7 @@
 {
   "name": "agent-ops-kit",
   "version": "0.4.0",
-  "description": "Run one scheduled Claude Code loop safely: a charter with a graded merge policy, an independent PR grader, a guard hook, a run ledger, outcome checks and a heartbeat. The plugin adds the PR grader and puts claude-run, ops-check and heartbeat.py on your path.",
+  "description": "Run one scheduled Claude Code loop safely: a charter with a graded merge policy, an independent PR grader, a guard hook, a run ledger, outcome checks and a heartbeat. The plugin puts claude-run, ops-check and heartbeat.py on your path.",
   "author": {
     "name": "Albert Nahas",
     "url": "https://github.com/albertnahas"
@@ -16,8 +16,5 @@
     "merge-policy",
     "scheduled",
     "ops"
-  ],
-  "agents": [
-    "./.claude/agents/pr-grader.md"
   ]
 }
