@@ -31,6 +31,26 @@ Write the outcome check before the prompt. If you can't say what proves the run 
 
 Every runner exports `OPS_LOOP=<registry name>`, so the ledger, the heartbeat and the dashboard all agree on which loop is which. `plan-loops` builds each new loop in this order: charter, check, runner, hand run, schedule, registry row.
 
+## Supervisors and Orders
+
+A charter is fixed. It says what the loop is for and what it must never do. What the loop is working on this month is a different thing, and it lives in an Orders file, `docs/orders/<charter-name>.md`, one per charter (morning and evening social share one). Orders are a table: the order, what it moves, its stop rule and its read date, plus a Changes log with one line per edit. The shape is in [examples/orders.md](../examples/orders.md). The loop reads its Orders first every run, and the charter outranks every line in them.
+
+**Marked blocks.** The charter's Mission, Kill switch and the X list of its merge policy sit between `<!-- mission -->` and `<!-- /mission -->`. Only you edit them. A PR that touches a marked block grades X, and so does an Order that loosens a hard limit or touches an X surface. The rest of the charter (queries, report format, data quirks) stays editable through graded PRs.
+
+**One writer per Orders file.** The supervisor writes it, or you do. The loop never edits its own Orders. If it wants a change, it says so under "Orders requests" in its report, and its supervisor answers. It writes only reports, logs and evidence files, and no new dated sections in its charter.
+
+**The Supervisor column.** Each registry row names exactly one supervisor: a loop, or `you`. One loop can supervise many. It sits beside Checked by, which still lists the other readers. A supervisor always reads its children, so it's implied there. The fleet builder rejects a supervisor that isn't a loop, and cycles.
+
+**What a supervisor does.**
+- It reviews each child at most once a week (daily ops: Mondays). It reads the child's reports since the last review and its outcome number.
+- For each Order it keeps, changes or retires it. It changes one only on or after its read date, or early when the stop rule or a P0 fires. Every change is a line in Changes with the reason.
+- It answers the child's Orders requests.
+- A monthly loop doesn't supervise a daily one: it reads too rarely to steer it. The strategy loop sits beside daily ops, both under you. An approved bet becomes an Order on the loop that owns its test, written the day it's approved.
+
+**Solo loops.** A loop only you read has supervisor `you` and no Orders file. Don't write one to look tidy.
+
+**The mission guard.** The marked blocks are the one part of a charter an agent shouldn't ever change, so a model-free script watches them. After you edit a charter, run `bin/mission-guard bless <charter>`. The heartbeat runs `mission-guard check` daily, which reads each blessed charter on its repo's origin default branch and alerts if a marked block differs.
+
 ## Budgets
 
 Two budgets, and the second runs out first.
@@ -89,7 +109,7 @@ The test measures demand directly, with signups, replies or pre-orders, because 
 
 **Your part.** Approve, reject or defer each bet in the memo's "Founder decisions" section by its deadline. The dashboard lists open decision sections from your repos' `docs/` (`waiting.github.memo_roots` in `fleet.json`). Silence means undecided: the bet is carried to the next memo, never assumed approved. A bet that reopens a settled decision says which one and what's different this time.
 
-**After you decide.** An approved bet's test is filed the same day, as a queue line or in the owning loop's charter, and only the test gets built. On the read date, the next memo reports the number against the kill rule. A killed bet goes into [DECISIONS.md](DECISIONS.md) so it isn't proposed again in the same form. A bet that clears comes back with its next, bigger test. Only once the evidence is strong enough does it get built, as normal graded PRs, with money, identity and data surfaces still X.
+**After you decide.** An approved bet's test is filed the same day, as a queue line or an Order on the loop that owns the test ([Supervisors and Orders](#supervisors-and-orders)), and only the test gets built. On the read date, the next memo reports the number against the kill rule. A killed bet goes into [DECISIONS.md](DECISIONS.md) so it isn't proposed again in the same form. A bet that clears comes back with its next, bigger test. Only once the evidence is strong enough does it get built, as normal graded PRs, with money, identity and data surfaces still X.
 
 Example of one bet in a memo (an imaginary product):
 

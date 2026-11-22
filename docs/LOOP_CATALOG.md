@@ -6,6 +6,8 @@ A loop is a trigger, one job written down as a charter (`docs/AGENT_LOOP.md`), a
 
 **Checked by** is who reads a loop's output after its own check passes: another loop (daily ops grades the fix agent's PRs), a script (the heartbeat), or you. Every loop names one, because an output nobody checks is how a loop drifts. The fleet dashboard draws these links.
 
+**Supervisor** is the one loop that sets another loop's Orders, or you. Daily ops usually supervises the loops it grades or reads (growth, social, smoke, fix on demand). Strategy, support, incident and the per-person loops usually stay with you. See "Supervisors and Orders" in the [playbook](FACTORY_PLAYBOOK.md).
+
 ## Per product
 
 | Loop | Needs it when | Trigger | Output | Outcome check | Checked by | Cost |

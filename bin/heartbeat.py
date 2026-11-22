@@ -5,6 +5,7 @@ Reads $AGENT_OPS_DIR/runs.jsonl (written by claude-run and ops-check) and alerts
 - failed its last outcome check (or, with no check, its last Claude run didn't end in success)
 - went silent: no run for twice its usual gap
 - cost over 3x its median on the last run
+Also runs bin/mission-guard check and alerts when a blessed charter's marked blocks drifted.
 Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY (a command
 called with a subject and a body; unset, it prints them), then logs its own pass line. If
 $AGENT_OPS_DIR is a git repo with a remote, it commits and pushes, so a second watchman in the
@@ -49,6 +50,10 @@ for loop, rs in by_loop.items():
     costs = [r["cost"] for r in claude[:-1] if r.get("cost")]
     if len(costs) >= 5 and (claude[-1].get("cost") or 0) > 3 * median(costs):
         alerts[f"cost:{loop}:{claude[-1]['date'][:10]}"] = f"{loop}: last run cost ${claude[-1]['cost']:.2f}, over 3x its usual ${median(costs):.2f}."
+
+guard = subprocess.run([str(Path(__file__).with_name("mission-guard")), "check"], capture_output=True, text=True)
+if guard.returncode:
+    alerts["mission:drift"] = "Charter mission blocks changed without a bless:\n" + guard.stdout.strip()
 
 since = lambda days: (now - dt.timedelta(days=days)).isoformat()
 cost = lambda rs, days: sum(r.get("cost") or 0 for r in rs if "check" not in r and r["date"] >= since(days))

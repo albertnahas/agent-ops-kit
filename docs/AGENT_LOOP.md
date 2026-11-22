@@ -4,16 +4,20 @@ status: active
 
 <!-- Set `status: paused` and push to stop the loop. The runner checks this line before Claude starts, and the agent checks it again first thing. -->
 
-Single source of truth for the scheduled agent. It overrides the routine's prompt. Steer the loop by editing this file, never the routine.
+Single source of truth for the scheduled agent. It overrides the routine's prompt. Steer the loop by editing this file, never the routine. Read `docs/orders/<name>.md` first; the marked blocks outrank it.
 
 ## Mission
 
+<!-- mission -->
 <One or two sentences: what the agent operates, what "better" means, and what it must never trade away for it.>
+<!-- /mission -->
 
 ## Kill switch
 
+<!-- mission -->
 1. **Pause:** set `status: paused` above and push to main.
 2. **Hard stop:** <the exact command, e.g. disable the scheduled task at claude.ai/code/routines, `launchctl unload ~/Library/LaunchAgents/<label>.plist`, or disable the workflow in GitHub>.
+<!-- /mission -->
 
 ## Data sources
 
@@ -42,6 +46,7 @@ Every PR is graded by an independent reviewer: the `pr-grader` subagent, with fr
 
 X means a revert won't fully undo it:
 
+<!-- mission -->
 - money movement: checkout, webhooks, purchases, prices, refunds
 - migrations that rewrite or drop data
 - user identity, auth and secrets
@@ -50,6 +55,8 @@ X means a revert won't fully undo it:
 - deleting user data
 - this file's merge policy, the grader, the hooks and CI workflows
 - <your own surfaces>
+- a PR that edits a marked block, or an Order that loosens a hard limit or touches an X surface
+<!-- /mission -->
 
 Not X, so grade A, B or C: copy, UI, seasonal looks, product limits, admin and analytics pages, the rest of this charter. <Add yours.>
 
@@ -73,9 +80,19 @@ Not X, so grade A, B or C: copy, UI, seasonal looks, product limits, admin and a
 3. **Findings:** ranked, max 5, each with its evidence and a proposed action.
 4. **Actions taken:** PRs opened, merged, closed or left open, each with its grade.
 5. **Escalations:** a ledger, one line each: `n. issue - first raised YYYY-MM-DD - recommendation - cost`. Carry items forward until marked `RESOLVED - <how>` or `DECIDED - <what>`.
-6. **Handoff:** what tomorrow's run should check.
+6. **Orders requests:** changes you want to your Orders, each with the number behind it. You never edit them; your supervisor answers. Leave out if none.
+7. **Handoff:** what tomorrow's run should check.
 
 Decided questions go in one line in `docs/DECISIONS.md`. Don't relitigate anything listed there.
+
+## Supervising
+
+Use this section only if this loop supervises others (the registry's Supervisor column names it). At most once a week per child (daily ops: Mondays), for each child:
+1. Read its reports since the last review and its outcome number.
+2. For each Order in `docs/orders/<child>.md`, keep, change or retire it. Change one only on or after its read date, or early when its stop rule or a P0 fires. Add one line to its Changes with the reason.
+3. Answer its Orders requests in that file.
+
+An Order that loosens a hard limit or touches an X surface is X: leave it for the human. Never edit a child's charter, only its Orders.
 
 ## Operating principles
 
