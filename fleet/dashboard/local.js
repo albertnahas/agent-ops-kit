@@ -26,6 +26,8 @@
   })));
   for (const id of ['loops', 'waiting']) {
     const d = window.FLEET[id];
+    /* as on claude.ai, a cell is a string, number, boolean or null */
+    d.rows.forEach((r) => Object.entries(r).forEach(([k, v]) => { if (v !== null && typeof v === 'object') throw new TypeError(`${id}.${k} is not a scalar: ${JSON.stringify(v)}`); }));
     datasets[id] = {status: 'ok', data: d.rows, meta: d.meta, columns: Object.keys(d.rows[0] || {})};
   }
   const rerun = () => { Object.values(calcs).forEach((c) => delete c.value); Object.keys(draws).forEach((n) => window.dash.draw(n)); };
