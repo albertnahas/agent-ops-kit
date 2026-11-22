@@ -25,7 +25,7 @@
     {"id": "role", "kind": "choice", "required": false, "ask": "Does it have a fleet role?", "help": "Most loops have none.",
      "choices": [{"value": "master", "label": "Master", "help": "The one loop that may message you."}, {"value": "manager", "label": "Manager", "help": "Takes its project's escalations."}]},
     {"id": "budget", "kind": "number", "required": false, "default": 5, "ask": "Most it may spend a run, in USD?", "help": "Start low and raise it from the hand run's cost."},
-    {"id": "turns", "kind": "number", "required": false, "default": 60, "ask": "Most turns a run?", "help": "A cap, so a stuck run ends."}
+    {"id": "turns", "kind": "integer", "required": false, "default": 60, "ask": "Most turns a run?", "help": "A cap, so a stuck run ends."}
   ],
   "edit": [
     {"id": "loop", "kind": "text", "required": true, "ask": "Which loop?", "help": "Its name in the registry."},

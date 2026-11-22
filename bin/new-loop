@@ -41,10 +41,14 @@ def args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--reschedule", action="store_true", help="move an existing loop to a new schedule or runtime")
     for q in SPEC["new"]:
-        kind = {"number": float if isinstance(q.get("default"), float) else int}.get(q["kind"], str)
-        p.add_argument(f"--{q['id']}", help=q["help"], type=kind, choices=[c["value"] for c in q.get("choices", [])] or None,
-                       action="append" if q.get("repeat") else "store", default=[] if q.get("repeat") else q.get("default", ""))
+        p.add_argument(f"--{q['id']}", help=q["help"], type={"number": float, "integer": int}.get(q["kind"], str),
+                       choices=[c["value"] for c in q.get("choices", [])] or None, action="append" if q.get("repeat") else "store",
+                       default=[] if q.get("repeat") else None if "default" in q else "")
     a = p.parse_args()
+    caps = old_caps(a.name) if a.reschedule and a.name else {}
+    for q in SPEC["new"]:  # a reschedule keeps the runner's caps unless given new ones
+        if "default" in q and getattr(a, q["id"]) is None:
+            setattr(a, q["id"], caps.get(q["id"], q["default"]))
     need = ("repo", "name", "runtime", "schedule") if a.reschedule else [q["id"] for q in SPEC["new"] if q["required"]]
     missing = [f"--{n}" for n in need if not getattr(a, n.replace("-", "_"))]
     if missing:
@@ -63,6 +67,14 @@ def args():
     if len(a.cron) != 5:
         p.error("--schedule is a 5-field cron line, like '0 2 * * *'")
     return a
+
+
+def old_caps(name):
+    """The budget and turns in a loop's current runner, if it has one."""
+    runner = OPS / f"runners/{name}.sh"
+    text = runner.read_text() if runner.exists() else ""
+    found = {k: re.search(rf"--{flag} (\S+)", text) for k, flag in (("budget", "max-budget-usd"), ("turns", "max-turns"))}
+    return {k: (float if k == "budget" else int)(m.group(1)) for k, m in found.items() if m}
 
 
 def calendar(cron):
@@ -116,7 +128,7 @@ def orders(template, a):
 
 
 RUNTIMES = {  # registry Runtime and Job, and the kill switch's hard stop, for each --runtime
-    "launchd": {"runtime": "mac", "job": "com.agent-ops.{name}", "stop": "`launchctl bootout gui/$(id -u)/com.agent-ops.{name}`"},
+    "launchd": {"runtime": "mac", "job": "com.agent-ops.{name}", "stop": "`launchctl bootout gui/$(id -u)/com.agent-ops.{name}; rm ~/Library/LaunchAgents/com.agent-ops.{name}.plist`"},
     "cron": {"runtime": "cron", "job": "cron:{name}.sh", "stop": "`crontab -l | grep -v 'runners/{name}.sh' | crontab -`"},
     "cloud": {"runtime": "cloud", "job": "routine:{name}", "stop": "disable the routine `{name}` at claude.ai/code/routines"},
     "app": {"runtime": "app", "job": "task:{name}", "stop": "disable the scheduled task `{name}` in the Claude desktop app"}}
@@ -134,28 +146,39 @@ def registry_row(a, charter):
     return "| " + " | ".join(map(cell, cells)) + " |"
 
 
-def register(a, charter):
-    """Adds the loop's registry row, or with --reschedule updates its Runtime, Job and Schedule. Returns the
-    old runtime's stop line when it moved."""
+def registry(name):
+    """The registry's path, text, Registry table match and the loop's row match (or None)."""
     path = OPS / "REGISTRY.md"
     text = path.read_text() if path.exists() else (TEMPLATES / "REGISTRY.md").read_text()
     head = re.search(r"^## Registry\n(?:.*\n)*?\|---.*\n(?:\|.*\n)*", text, re.M)
     if not head:
         sys.exit(f"{path} has no Registry table")
-    row = re.search(rf"^\| *{re.escape(a.name)} *\|.*$", head.group(0), re.M | re.I)
+    row = re.search(rf"^\| *{re.escape(name)} *\|.*$", head.group(0), re.M | re.I)
+    return path, text, head, row
+
+
+def register(a, charter):
+    """Adds the loop's registry row, or with --reschedule updates its Runtime, Job and Schedule."""
+    path, text, head, row = registry(a.name)
     if not a.reschedule:
         if row:
             sys.exit(f"{path} already has a row for {a.name}")
         path.write_text(text[:head.end()] + registry_row(a, charter) + "\n" + text[head.end():])
-        return None
-    if not row:
-        sys.exit(f"{path} has no row for {a.name}")
-    cells = row.group(0).strip("|").split("|")
-    old = next(r for r, v in RUNTIMES.items() if v["job"].format(name=a.name) == cells[3].strip())
+        return
+    cells = re.split(r"(?<!\\)\|", row.group(0).strip("|"))
     new = RUNTIMES[a.runtime]
     cells[2:5] = [f" {new['runtime']} ", f" {new['job'].format(name=a.name)} ", f" {a.schedule} "]
     at = head.start() + row.start()
     path.write_text(text[:at] + "|" + "|".join(cells) + "|" + text[at + len(row.group(0)):])
+
+
+def old_runtime(name):
+    """The runtime a registered loop runs on now, read from its registry Job, or exit."""
+    path, _, _, row = registry(name)
+    job = row and re.split(r"(?<!\\)\|", row.group(0).strip("|"))[3].strip()
+    old = next((r for r, v in RUNTIMES.items() if v["job"].format(name=name) == job), None)
+    if not old:
+        sys.exit(f"{path} has no row for {name} with a Job new-loop wrote" if row else f"{path} has no row for {name}")
     return old
 
 
@@ -202,12 +225,14 @@ def reschedule(a, charter):
     path = a.repo / charter
     if not path.exists():
         sys.exit(f"no charter at {path}")
+    old = old_runtime(a.name)
     files, install = schedule(a, charter, OPS / f"checks/{a.name}.py")
-    for f in [OPS / f"runners/{a.name}.sh", *(OPS / "schedules").glob(f"*{a.name}.*")]:
+    register(a, charter)
+    write(files)
+    for f in [OPS / f"runners/{a.name}.sh", *(OPS / f"schedules/{n}" for n in (
+            f"{label(a)}.plist", f"{a.name}.cron", f"{a.name}.routine.md", f"{a.name}.task.md"))]:
         if f not in files and f.exists():
             f.unlink()
-    old = register(a, charter)
-    write(files)
     steps = [f"Stop the old schedule: {RUNTIMES[old]['stop'].format(name=a.name).strip('`')}", f"Install the new one: {install}"]
     if old != a.runtime:
         text = path.read_text()
