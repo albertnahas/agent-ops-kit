@@ -29,6 +29,7 @@ cat > "$AGENT_OPS_DIR/REGISTRY.md" <<EOF
 | reader | Blog | cloud | routine:reader-job | daily | | | routine:good, YOU, flaky, you, reader-job | routine:watched |
 | lonely | Blog | cloud | routine:lonely | daily | | | |  |
 | watched | Blog | cloud | routine:watched | daily | | | com.me.build | reader |
+| jobless | Blog | mac |  | daily | | | |  |
 
 ## Services
 
@@ -65,6 +66,7 @@ expect "a supervisor's job names its loop"     "[ \"\$(sup reader | cut -d' ' -f
 expect "no supervisor is fine"                 "[ \"\$(sup lonely)\" = 'null | null' ]"
 expect "a missing supervisor is flagged"       "[ \"\$(sup fresh)\" = 'ghost | supervisor ghost is not a loop in the registry' ]"
 expect "supervision cycles are flagged"        "sup flaky | grep -q 'comes back to it: flaky → flaky' && sup reader | grep -q 'reader → watched → reader' && sup watched | grep -q 'watched → reader → watched'"
+expect "a registered row with no job is paused" "[ \"\$(status jobless)\" = paused ]"
 expect "no checker is an empty list"           "jq -e '.rows[] | select(.loop == \"lonely\") | .checked_by == []' $L >/dev/null"
 expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
 expect "a project is its own scope"           "[ \"\$(scope good)\" = Shop ]"
@@ -96,7 +98,7 @@ expect "health: builds with no registry"       "[ -f $P ] && jq -e '.meta[] | se
 expect "health: exit 0 with a fresh log ran"   "[ \"\$(status com.example.morning-digest)\" = ran ]"
 expect "health: an interval job ran"           "[ \"\$(status com.example.inbox-triage)\" = ran ]"
 expect "health: a non-zero exit is failing"    "[ \"\$(status com.example.price-watch)\" = failing ] && [ \"\$(jq -r '.rows[] | select(.loop == \"com.example.price-watch\") | .detail' $L)\" = 'last run exited 1' ]"
-expect "health: an old log makes the last run unknown, not silent" "jq -e '.rows[] | select(.loop == \"com.example.weekly-review\") | .status == \"ran\" and .last_run == null and (.detail | test(\"unknown\"))' $L >/dev/null"
+expect "health: an old log makes the last run unknown, not silent" "jq -e '.rows[] | select(.loop == \"com.example.weekly-review\") | .status == \"no record\" and .last_run == null and (.detail | test(\"unknown\"))' $L >/dev/null"
 expect "health: a routine past its period is silent" "[ \"\$(status competitor-digest)\" = silent ]"
 expect "health: a job launchd keeps running is a service" "jq -e '.rows[] | select(.loop == \"com.example.notes-sync\") | .project == \"Service\" and .status == \"service\"' $L >/dev/null"
 expect "health: a dated job is a one-off"      "[ \"\$(status com.example.launch-reminder)\" = one-off ]"
@@ -107,6 +109,9 @@ expect "health: cron names skip shells, @reboot is skipped" "[ \"\$(status cron:
 expect "health: routines show their last status" "[ \"\$(status repo-dependency-check)\" = ran ] && [ \"\$(status release-notes-draft)\" = failing ] && [ -z \"\$(status paused-idea)\" ]"
 expect "health: nothing unregistered, no cost or pass rate" "jq -e '[.rows[] | select(.status == \"unregistered\" or .cost != null or .pass_rate != null)] == []' $L >/dev/null"
 expect "health: no registry path in the data"  "jq -e '.meta[] | select(.label == \"Registry\") | .value == null' $L >/dev/null"
+expect "health: a job named after a ledger loop is that loop" "python3 -c \"import sys; sys.path.insert(0, 'fleet'); from fleet import discovered
+j = {'com.me.digest': {'loaded': True, 'vendor': False, 'oneoff': False, 'daemon': False, 'schedule': ''}}
+l, _ = discovered(j, {}, {}, {'digest': {'last': '2099'}}, '2000'); assert [r['Loop'] for r in l] == ['digest'], l\""
 expect "health: the page is titled Loop health" "grep -q '<title>Loop health</title>' $H/fleet/dashboard.html"
 
 [ "$fail" -eq 0 ] && echo "all passed" || { echo "some failed"; exit 1; }

@@ -204,7 +204,8 @@ def discovered(jobs, routines, tasks, led, week):
     """With no registry, everything found stands in for its own row: loops for scheduled jobs, routines, tasks and
     recent ledger names, services for jobs launchd keeps running. One-offs and vendors' jobs keep their own paths."""
     mine = {k: j for k, j in jobs.items() if j["loaded"] and not j["vendor"] and not j["oneoff"]}
-    loops = [{"Loop": k, "Job": k, "Runtime": "cron" if k.startswith("cron:") else "mac", "Schedule": j["schedule"]}
+    named = {norm(n): n for n in led}  # a job whose label ends in a ledger name is that loop: com.me.digest logs as digest
+    loops = [{"Loop": named.get(norm(re.split(r"[.:]", k)[-1]), k), "Job": k, "Runtime": "cron" if k.startswith("cron:") else "mac", "Schedule": j["schedule"]}
              for k, j in mine.items() if not j["daemon"]]
     loops += [{"Loop": n, "Job": f"routine:{n}", "Runtime": "cloud", "Schedule": r.get("cron") or "on event"}
               for n, r in routines.items() if r.get("enabled") and (r.get("cron") or r.get("last_finished_at"))]
@@ -246,7 +247,7 @@ def build():
         spec, live, j = None, True, None
         if kind == "local":
             j = jobs.get(ref)
-            live = not ref or bool(j and j["loaded"])  # no job: a ledger name, live while it logs
+            live = (health and not ref) or bool(j and j["loaded"])  # with no registry, a ledger name is live while it logs
             spec = j and j["spec"]
             if j and j["interval"]: row["next_due"] = f"every {j['interval'] // 60} min"
         else:
@@ -283,17 +284,18 @@ def build():
         elif j and j.get("has_log") is False:
             row["detail"] = "cron keeps no record of runs: send this line's output to a file (>> file 2>&1) to see when it last ran"
         checked = (loop in led and led[loop]["has_checks"]) or check.exists()
-        late = False
+        late = unknown = False
         if spec and row["last_run"]:
             prev1, prev2 = nth(fires(spec, now, -1), 0), nth(fires(spec, now, -1), 1)
             late = bool(prev1 and prev2) and now - dt.datetime.fromisoformat(row["last_run"]) > (prev1 - prev2) + dt.timedelta(hours=12)
         if late and j and loop not in led and not check.exists():  # an old log is no proof: scripts often log elsewhere
             row.update(last_run=None, detail="; ".join(filter(None, [row["detail"], f"its log last changed {j['log_at']:%d %b}, so when it last ran is unknown"])))
-            late = False
+            late, unknown = False, True
         row["status"] = ("stale" if kind != "local" and (snap_age_h is None or snap_age_h > STALE_SNAPSHOT_H)
                          else "paused" if not live
                          else "failing" if row["result"] == "fail"
                          else "silent" if late
+                         else "no record" if unknown
                          else ("no record" if j and j.get("has_log") is not None and (not j["has_log"] or j["log_at"]) else "no runs yet") if not row["last_run"] and not row["result"]
                          else "chronic" if loop in led and led[loop]["chronic"]
                          else "healthy" if checked
