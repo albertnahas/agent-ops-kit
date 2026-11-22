@@ -34,6 +34,7 @@ expect "a run that exited 0 with is_error also fails the check" "! bin/ops-check
 echo "{\"loop\":\"fine\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"exit\":0,\"is_error\":false}" >> "$AGENT_OPS_DIR/runs.jsonl"
 expect "a healthy Claude run leaves the check alone" "bin/ops-check -l fine -- true >/dev/null"
 expect "the loop name falls back to the folder when the launchd label is 0 or unset" "XPC_SERVICE_NAME=0 bin/ops-check -- true >/dev/null; tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"$(basename "$PWD")\"'"
+expect "an app's own XPC name is not a loop name" "XPC_SERVICE_NAME=application.com.example.App.1.2 bin/ops-check -- true >/dev/null; tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"$(basename "$PWD")\"'"
 expect "OPS_LOOP wins over the launchd label" "OPS_LOOP=mine XPC_SERVICE_NAME=com.x.job bin/ops-check -- true >/dev/null; tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"mine\"'"
 
 out=$(bin/heartbeat.py | tail -1)

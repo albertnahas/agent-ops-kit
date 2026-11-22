@@ -4,10 +4,10 @@
 # the ledger that bin/heartbeat.py reads. A crash (usage limit, API error) still reports subtype
 # "success": exit and is_error are the truth. denials counts tool calls the permission check refused,
 # which the agent usually works around without saying so; session ties the line to its transcript.
-# Loop name: $OPS_LOOP, else the launchd label (terminals and shell jobs see XPC_SERVICE_NAME=0),
+# Loop name: $OPS_LOOP, else the launchd label (a shell sees 0, or its app's own application.<app>.<pid> name, so neither counts),
 # else the repo's folder name.
 OPS="${AGENT_OPS_DIR:-$HOME/.agent-ops}"; mkdir -p "$OPS"
-LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^0?$ ]] && LOOP=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^(0?|application\..*)$ ]] && LOOP=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 args=(); skip=0
 for a in "$@"; do
   if ((skip)); then skip=0; continue; fi
