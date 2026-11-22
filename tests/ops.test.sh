@@ -55,6 +55,11 @@ echo '{"loop":"b","date":"2026-11-01T10:00:00","check":"pass"}' > "$r/b/runs.jso
 echo '{"loop":"a","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/runs.jsonl"
 AGENT_OPS_DIR="$r/a" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null
 expect "two writers' ledger lines merge and push" "g2 $r/a fetch -q && [ \$(g2 $r/a show origin/HEAD:runs.jsonl | grep -c '\"loop\"') = 3 ] && ! grep -q '<<<<' $r/a/runs.jsonl"
+echo '{}' > "$r/a/missions.json"; g2 "$r/a" add missions.json; g2 "$r/a" commit -qm m; g2 "$r/a" push -q origin HEAD; echo '{"x":1}' > "$r/a/missions.json"; mkdir "$r/a/fleet"; echo page > "$r/a/fleet/dashboard.html"
+g2 "$r/b" pull -q; echo remote > "$r/b/note.md"; g2 "$r/b" add note.md; g2 "$r/b" commit -qm b2; g2 "$r/b" push -q origin HEAD
+expect "heartbeat commits only the ledger and COSTS.md, and syncs past other local edits" "AGENT_OPS_DIR=$r/a GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null && g2 $r/a fetch -q && [ \"\$(g2 $r/a diff --name-only HEAD~1 HEAD | sort | tr '\\n' ' ')\" = 'COSTS.md runs.jsonl ' ] && [ \"\$(g2 $r/a status --porcelain)\" = \"\$(printf ' M missions.json\\n?? alerts.json\\n?? fleet/')\" ] && [ \$(g2 $r/a rev-parse HEAD) = \$(g2 $r/a rev-parse origin/HEAD) ]"
+g2 "$r/b" pull -q; echo '{"b":1}' > "$r/b/missions.json"; g2 "$r/b" commit -qam b3; g2 "$r/b" push -q origin HEAD
+expect "local edits that clash with the remote fail the sync and stay as they were" "AGENT_OPS_DIR=$r/a GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null; tail -1 $r/a/runs.jsonl | grep -q 'clash with the remote' && [ \"\$(cat $r/a/missions.json)\" = '{\"x\":1}' ] && [ -z \"\$(g2 $r/a ls-files -u)\$(g2 $r/a stash list)\" ]"
 mkdir -p "$r/a/inner/.git"; echo '{"loop":"i","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/inner/runs.jsonl"; head=$(g2 "$r/a" rev-parse HEAD)
 expect "an empty .git inside never commits the enclosing repo" "AGENT_OPS_DIR=$r/a/inner bin/heartbeat.py >/dev/null && [ \$(g2 $r/a rev-parse HEAD) = $head ]"
 rm -rf "$r"
