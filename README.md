@@ -1,10 +1,10 @@
 # agent-ops-kit
 
-A software factory made of Claude Code loops. It's the setup I use to run a live product on a night shift of agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
-
-Start with the [factory playbook](docs/FACTORY_PLAYBOOK.md): which loops to start and in what order, how each one is checked, what it may cost, when it gets retired, and how big changes get decided as bets with a 14-day test.
+The setup I use to run a live product on a night shift of Claude Code agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
 On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 PRs have merged since July 2026 (as of 21 Nov). The loops opened 170 of them, 77 of which are daily reports. The rest came from Claude Code sessions I directed and a few dependency bots. No loop PR has been reverted. The one revert on main since July undid a pricing change I pushed myself.
+
+Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/agent-ops-factory) builds on this kit with a playbook, a loop planner and one dashboard for every loop.
 
 ## What's inside
 
@@ -14,11 +14,6 @@ On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 
 - **Mechanic:** "Fix it now" on an escalation wakes a fix agent. It opens a PR, and the person hears back only once the fix is live. `examples/support-agent/SUPPORT_FIX.md`
 - **Inspector:** a fresh-context grader grades every PR A, B, C or X. It never saw the author's reasoning, only the merge policy, the PR body and the diff. `.claude/agents/pr-grader.md`
 - **Watchman:** every run is logged with its cost and judged by a free outcome check, not by Claude's exit code. A heartbeat alerts you on a failed, silent or costly loop, and a second watchman in the cloud alerts you if the heartbeat stops. `bin/`, `checks/`
-
-**The control room**
-
-- **Fleet dashboard:** one page for every scheduled loop you run, across all your projects: healthy or not, when it runs next, what it cost, who checks its output, and everything waiting on you. Built with no model from your registry, launchd, cron and the run ledger, so it's free to rebuild. `fleet/`
-- **Loop planner:** reads a project and proposes the loops it needs from a catalog of the ones that earned their keep, then builds the ones you approve with a charter, an outcome check, a schedule and a registry row. `skills/plan-loops`, `docs/LOOP_CATALOG.md`
 
 **The rules they work by** (`docs/AGENT_LOOP.md`)
 
@@ -31,11 +26,7 @@ On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-Then ask Claude Code to "start a software factory for this project" (the `factory` skill, which walks the playbook), "plan the loops this project needs" (`plan-loops`) or "set up my fleet dashboard" (`fleet`). Nothing it schedules or changes happens without your yes.
-
-No plugins? Paste this into Claude Code instead:
-
-> Clone https://github.com/albertnahas/agent-ops-kit to ~/.agent-ops/kit, read its skills/fleet/SKILL.md and follow "Set up". Ask me before you schedule anything or write my crontab.
+It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook, and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
 
 ## Try it in 5 minutes
 
@@ -52,7 +43,7 @@ tests/hooks.test.sh && tests/ops.test.sh
 Every line should say `ok`. Then copy it into your repo:
 
 ```bash
-cp -R .claude bin checks docs fleet scripts tests /path/to/your-repo/
+cp -R .claude bin checks docs scripts tests /path/to/your-repo/
 ```
 
 ```bash
@@ -71,7 +62,6 @@ The support agent comes later. It needs a product with a ticket table and a depl
 
 | File | What it does |
 |---|---|
-| `docs/FACTORY_PLAYBOOK.md` | The front door: the order to start loops in, the registry, budgets, fix or retire, when work earns a loop, bets and scaling. |
 | `docs/AGENT_LOOP.md` | The charter: mission, kill switch, data sources, KPIs, the graded merge policy, what each run does and the report format. The agent's only instruction set. |
 | `.claude/agents/pr-grader.md` | The grader. A frontmatter hook limits its Bash to `gh pr view` and `gh pr diff`. |
 | `.claude/hooks/guard-bash.sh` | Blocks force pushes and pushes to main, so the agent works through PRs. |
@@ -83,10 +73,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop or a run over 3x its usual cost, at most every 3 days per alert. Writes `COSTS.md`. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
-| `fleet/` | The fleet dashboard: `fleet.py` builds `loops.json`, `waiting.json` and `dashboard.html`; `README.md` says what it reads and how each status is decided; `SYNC.md` puts it on claude.ai with your cloud routines. |
-| `skills/` | Claude Code skills: `factory` walks the playbook for a project, `plan-loops` designs and builds the loops a project needs, `fleet` sets up and runs the dashboard and retires loops. |
-| `docs/LOOP_CATALOG.md` | The loop types a product needs, when it needs each, what checks it and who reads its output. |
-| `tests/` | Feeds known commands to both hooks, fixture ledgers to `ops-check` and the heartbeat, and a fixture registry to the fleet builder. |
+| `tests/` | Feeds known commands to both hooks, and fixture ledgers to `ops-check` and the heartbeat. |
 | `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, and the support agent. |
 
 ## Limits, honestly

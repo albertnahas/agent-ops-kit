@@ -1,12 +1,15 @@
 {
   "name": "agent-ops-kit",
-  "description": "Claude Code plugin for running a software factory of scheduled agent loops: start it, watch it, retire what nobody reads.",
-  "owner": { "name": "Albert Nahas", "url": "https://github.com/albertnahas" },
+  "description": "Claude Code plugin for running scheduled agent loops safely.",
+  "owner": {
+    "name": "Albert Nahas",
+    "url": "https://github.com/albertnahas"
+  },
   "plugins": [
     {
       "name": "agent-ops-kit",
       "source": "./",
-      "description": "Start a software factory, plan the loops a project needs and see every loop on one dashboard."
+      "description": "claude-run, ops-check and heartbeat.py on your path: a run ledger, outcome checks and a heartbeat for scheduled loops."
     }
   ]
 }
