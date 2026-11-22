@@ -37,7 +37,7 @@ Without a ledger, a launchd loop's last exit and the time its log file last chan
 
 ## Projects and General
 
-The picker at the top of the page narrows every tab to one project: the overview's status line, numbers and lists, the loops and what waits on you. General holds what belongs to no one product: loops with no project, the projects you list under `general` in `fleet.json` (say your ops and personal loops), services, one-off and unregistered jobs, and queue lines. A PR or an open decision belongs to the registry project its repo is named after, ignoring case and punctuation (`social-algorithms` is Social algorithms), and to General otherwise. Each row carries the result as `scope`, so the page never repeats the rule.
+The picker at the top of the page narrows every tab to one project: the overview's status line, numbers and lists, the loops and what waits on you. General holds what belongs to no one product: loops with no project, the projects you list under `general` in `fleet.json` (say your ops and personal loops), services, one-off and unregistered jobs, and queue lines. A PR or an open decision belongs to the registry project its repo is named after, ignoring case and punctuation (`social-algorithms` is Social algorithms), and to General otherwise. Each row carries the result as `scope`, so the page never repeats the rule; within General, the Loops tab still shows each project's own card.
 
 ## Keeping it fresh
 

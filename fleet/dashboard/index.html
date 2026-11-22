@@ -359,7 +359,7 @@ dash.draw('refresh', (e) => { e.textContent = metaOf('Refresh') || 'Rebuilt by f
 dash.draw('registry', (e) => { e.textContent = metaOf('Registry') || '—'; });
 dash.draw('scope', (sel) => {
   const l = dash.data('loops'), w = dash.data('waiting'), {project = ''} = dash.params();
-  const all = new Set([...l.data, ...w.data].map((r) => r.scope).filter(Boolean));
+  const all = new Set([...l.data, ...w.data, {scope: project}].map((r) => r.scope).filter(Boolean)); /* a pick that left the data still shows */
   const projects = [...all].filter((p) => p !== 'General').sort((a, b) => a.localeCompare(b));
   sel.replaceChildren(new Option('All projects', ''), ...(all.has('General') ? [new Option('General')] : []), ...projects.map((p) => new Option(p)));
   sel.value = project;
