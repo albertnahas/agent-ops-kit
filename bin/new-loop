@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Scaffold one scheduled loop, the same way every time. No model, no side effects outside files.
 
-Its flags are the `new` questions in skills/new-loop/questions.json, the spec the skill and the dashboard
-form read too. docs/RUNTIMES.md says which --runtime fits.
+Its flags are the `new` questions and the `defaults` in skills/new-loop/questions.json, the spec the skill
+and the dashboard form read too. Only the `new` ones without a default are needed; --repo defaults to the
+checkout you're in, --name to its folder name and --outcome to the mission. docs/RUNTIMES.md says which
+--runtime fits.
 
 Writes, refusing to overwrite any of them:
   REPO/docs/loops/NAME.md         the charter, from the kit's docs/AGENT_LOOP.md, with its Good block filled
@@ -15,10 +17,10 @@ and copies into REPO whatever the charter relies on that it lacks: the grader, t
 ops-check, scripts/mission-guard and docs/DECISIONS.md. Text for mission blocks is the user's, verbatim.
 It commits, pushes, blesses and schedules nothing: it prints those steps.
 
-new-loop --reschedule --repo PATH --name NAME --runtime R --schedule CRON moves an existing loop: it rewrites
+new-loop --reschedule [--repo PATH] --name NAME --runtime R --schedule CRON moves an existing loop: it rewrites
 its runner, schedule file and registry row, and, when the runtime changes, the charter's kill switch line,
 which is a mission block, so that one lands as a founder PR. It prints how to stop the old schedule."""
-import argparse, datetime as dt, json, os, plistlib, re, shlex, shutil, sys
+import argparse, datetime as dt, json, os, plistlib, re, shlex, shutil, subprocess, sys, unicodedata
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
@@ -31,7 +33,7 @@ INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "
            **{str(p.relative_to(KIT)): str(p.relative_to(KIT)) for d in (".claude/agents", ".claude/hooks")
               for p in sorted((KIT / d).iterdir())}}
 GENERIC = {"letter", "number", "journey", "file", "name", "n", "how", "what"}  # template words that stay as written
-cell = lambda v: str(v).replace("|", "\\|")  # a | inside a markdown table cell
+cell = lambda v: " ".join(str(v).split()).replace("|", "\\|")  # one line, with any | escaped, in a markdown table cell
 LEVEL = r"(at least|at most)\s+[\d,]*\.?\d+"
 GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:**\n- **Check:**\n"
         "<!-- /mission -->\n\n")  # #22's block, for a template that predates it
@@ -40,23 +42,28 @@ GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:*
 def args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--reschedule", action="store_true", help="move an existing loop to a new schedule or runtime")
-    for q in SPEC["new"]:
-        p.add_argument(f"--{q['id']}", help=q["help"], type={"number": float, "integer": int}.get(q["kind"], str),
+    spec = SPEC["new"] + SPEC["defaults"]
+    for q in spec:
+        p.add_argument(f"--{q['id']}", help=q["help"] + (f" Default: {q['default']}" if "default" in q else ""), type={"number": float, "integer": int}.get(q["kind"], str),
                        choices=[c["value"] for c in q.get("choices", [])] or None, action="append" if q.get("repeat") else "store",
                        default=[] if q.get("repeat") else None if "default" in q else "")
     a = p.parse_args()
     caps = old_caps(a.name) if a.reschedule and a.name else {}
-    for q in SPEC["new"]:  # a reschedule keeps the runner's caps unless given new ones
+    for q in spec:  # a reschedule keeps the runner's caps unless given new ones
         if "default" in q and getattr(a, q["id"]) is None:
             setattr(a, q["id"], caps.get(q["id"], q["default"]))
-    need = ("repo", "name", "runtime", "schedule") if a.reschedule else [q["id"] for q in SPEC["new"] if q["required"]]
-    missing = [f"--{n}" for n in need if not getattr(a, n.replace("-", "_"))]
+    need = ("name", "runtime", "schedule") if a.reschedule else [q["id"] for q in spec if q["required"]]
+    missing = [f"--{n}" for n in need if not str(getattr(a, n.replace("-", "_"))).strip()]
     if missing:
         p.error("missing " + ", ".join(missing))
-    a.repo = Path(a.repo).expanduser().resolve()
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+    a.repo = Path(a.repo or top or ".").expanduser().resolve()
+    ascii_name = unicodedata.normalize("NFKD", a.repo.name).encode("ascii", "ignore").decode().lower()
+    a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", ascii_name).strip("-.")
+    a.outcome = " ".join((a.outcome or a.mission or "").split())
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
-        p.error("--name is letters, digits, _ . and -, and not you or nobody")
+        p.error("--name is letters, digits, _ . and -, and not you or nobody; pass one when the repo's folder name gives none")
     if not a.reschedule and re.match(LEVEL, a.floor, re.I) and not a.measure:
         p.error("a measured --floor needs --measure, the command that reads it from --source")
     if not a.reschedule and not re.match(LEVEL, a.floor, re.I) and not a.floor.startswith("unmeasured: "):
