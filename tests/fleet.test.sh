@@ -24,6 +24,8 @@ cat > "$AGENT_OPS_DIR/REGISTRY.md" <<EOF
 | broken | Shop | cloud | routine:broken | daily | | | good, heartbeat |
 | flaky |  | cloud | routine:flaky | daily | | | you |
 | fresh | Blog | cloud | routine:fresh | daily | | | you |
+| reader | Blog | cloud | routine:reader-job | daily | | | routine:good, YOU, flaky, you, reader-job |
+| lonely | Blog | cloud | routine:lonely | daily | | | |
 EOF
 {
   echo "{\"loop\":\"good\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":2}"
@@ -33,7 +35,7 @@ EOF
   echo "{\"loop\":\"stray\",\"date\":\"$(day 1)\",\"subtype\":\"success\"}"
   printf 'not json\n{}\n'
 } > "$AGENT_OPS_DIR/runs.jsonl"
-echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[$(for r in good broken flaky fresh; do printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' $r; done | sed 's/,$//')],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
+echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[$(for r in good broken flaky fresh reader-job lonely; do printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' $r; done | sed 's/,$//')],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
 
 expect "builds with a registry and a junky ledger" "python3 fleet/fleet.py >/dev/null"
 expect "a passing check is healthy"            "[ \"\$(status good)\" = healthy ]"
@@ -42,7 +44,9 @@ expect "3 of the last 7 failed is flaky"       "[ \"\$(status flaky)\" = chronic
 expect "never run is not run yet"              "[ \"\$(status fresh)\" = 'no runs yet' ]"
 expect "a ledger name with no row is unregistered" "[ \"\$(status stray)\" = unregistered ]"
 expect "checked by is a list"                  "jq -e '.rows[] | select(.loop == \"broken\") | .checked_by == [\"good\", \"heartbeat\"]' $L >/dev/null"
-expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
+expect "checked by resolves jobs and you, once each" "jq -e '.rows[] | select(.loop == \"reader\") | .checked_by == [\"good\", \"you\", \"flaky\", \"reader\"]' $L >/dev/null"
+expect "no checker is an empty list"           "jq -e '.rows[] | select(.loop == \"lonely\") | .checked_by == []' $L >/dev/null"
+expect "cost comes from the ledger"          "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
 expect "the dashboard carries the data"        "grep -q 'report missing' $AGENT_OPS_DIR/fleet/dashboard.html && grep -q 'dash-one-writer' $AGENT_OPS_DIR/fleet/dashboard.html"
 
 # Schedules: the next two fires after 10:00 on Sunday 22 Nov 2026 (or the day given), as crontab reads them.

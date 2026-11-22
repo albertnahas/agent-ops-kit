@@ -245,6 +245,12 @@ def build():
                          else "no check")
         rows.append(row)
 
+    # Checked by names a loop by its name or its job, with or without the routine:/task: prefix, or you; any other
+    # name is kept as written, a checker the registry doesn't have.
+    alias = {k: r["loop"] for r in rows for k in (r["job"], r["job"].partition(":")[2]) if k} | {r["loop"]: r["loop"] for r in rows}
+    for r in rows:
+        r["checked_by"] = list(dict.fromkeys("you" if c.lower() == "you" else alias.get(c, c) for c in r["checked_by"]))
+
     for svc in services:
         claimed.add(svc["Job"])
         j = jobs.get(svc["Job"], {})
