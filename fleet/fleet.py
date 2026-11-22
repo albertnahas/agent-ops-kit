@@ -272,7 +272,7 @@ def build():
     resolve = lambda c: "you" if c.lower() == "you" else alias.get(c, c)
     loops = {r["loop"]: r for r in rows if "checked_by" in r}
     for r in loops.values():
-        r["checked_by"] = list(dict.fromkeys(map(resolve, r["checked_by"])))
+        r["checked_by"] = ", ".join(dict.fromkeys(map(resolve, r["checked_by"])))  # cells are scalars: the claude.ai runtime has no list cells
         r["supervisor"] = r["supervisor"] and resolve(r["supervisor"])
     # Supervisor, optional, is the one loop that writes this loop's Orders (or you). A parent that is no loop, or a
     # chain that comes back to the row, is flagged on it.
