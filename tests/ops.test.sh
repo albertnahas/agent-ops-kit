@@ -14,7 +14,7 @@ bin/ops-check -l broken -- sh -c 'echo report missing; exit 1' >/dev/null
 expect "ops-check passes through the exit code" "! bin/ops-check -l broken -- false >/dev/null"
 expect "ops-check logs pass and fail" "[ \$(grep -c '\"check\":\"pass\"' $AGENT_OPS_DIR/runs.jsonl) = 1 ] && grep -q 'report missing' $AGENT_OPS_DIR/runs.jsonl"
 
-day() { date -v-"$1"d +%FT10:00:00 2>/dev/null || date -d "$1 days ago" +%FT10:00:00; }
+day() { date -v-"$1"d +%FT%T 2>/dev/null || date -d "$1 days ago" +%FT%T; }  # now, days back: never in the future
 for d in 12 11 10 9; do echo "{\"loop\":\"quiet\",\"date\":\"$(day $d)\",\"subtype\":\"success\",\"cost\":1}"; done >> "$AGENT_OPS_DIR/runs.jsonl"
 for d in 6 5 4 3 2 1; do echo "{\"loop\":\"pricey\",\"date\":\"$(day $d)\",\"subtype\":\"success\",\"cost\":1}"; done >> "$AGENT_OPS_DIR/runs.jsonl"
 echo "{\"loop\":\"pricey\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"cost\":9}" >> "$AGENT_OPS_DIR/runs.jsonl"
@@ -33,13 +33,14 @@ expect "heartbeat flags malformed ledger lines and keeps going" "jq -e '[.alerts
 expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | \\\$15.00' $AGENT_OPS_DIR/COSTS.md"
 expect "heartbeat logs its own pass line" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\": \"heartbeat\"'"
 expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
-echo "{\"loop\":\"broken\",\"date\":\"$(day 0)\",\"check\":\"fail\",\"detail\":\"again\"}" >> "$AGENT_OPS_DIR/runs.jsonl"
-expect "a check failing again the next day is held too" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
+h=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 1)\",\"check\":\"fail\"}" > "$h/runs.jsonl"; AGENT_OPS_DIR=$h bin/heartbeat.py >/dev/null
+echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}" >> "$h/runs.jsonl"
+expect "a check failing again the next day is held too" "[ \"\$(AGENT_OPS_DIR=$h bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"; rm -rf "$h"
 expect "ops-check with no command is a usage error, not a pass" "! bin/ops-check -l empty -- 2>/dev/null && ! grep -q '\"loop\":\"empty\"' $AGENT_OPS_DIR/runs.jsonl"
 
 # the watchman survives any ledger: bad bytes, a cut last line, odd field types, Z and offset dates, a future date
 j=$(mktemp -d)
-{ echo "{\"loop\":\"z\",\"date\":\"$(day 1)Z\",\"check\":\"pass\"}"; echo "{\"loop\":\"z\",\"date\":\"$(day 0)+05:30\",\"check\":\"pass\"}"
+{ echo "{\"loop\":\"z\",\"date\":\"$(day 2)Z\",\"check\":\"pass\"}"; echo "{\"loop\":\"z\",\"date\":\"$(day 1).5-0100\",\"check\":\"pass\"}"; echo "{\"loop\":\"z\",\"date\":\"$(day 0)+05:30\",\"check\":\"pass\"}"
   echo '{"loop":["l"],"date":"2026-11-01T10:00:00"}'; echo '{"loop":"c","date":"","cost":"9"}'; echo '{"loop":"c","date":"2999-01-01T00:00:00"}'
   echo "{\"loop\":\"c\",\"date\":\"$(day 1)\",\"subtype\":\"success\",\"cost\":\"lots\"}"; printf 'nul\0 and \303(\n'; printf '{"loop":"cut","date":"2026-11-0'; } > "$j/runs.jsonl"
 expect "heartbeat skips junk lines with an alert and logs its own line apart" "AGENT_OPS_DIR=$j bin/heartbeat.py | tail -1 | jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 5' >/dev/null && tail -1 $j/runs.jsonl | jq -e '.loop == \"heartbeat\"' >/dev/null"
