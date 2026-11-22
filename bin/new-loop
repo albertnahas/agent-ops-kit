@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Scaffold one scheduled loop, the same way every time. No model, no side effects outside files.
 
-Its flags are the `new` questions in skills/new-loop/questions.json, the spec the skill and the dashboard
-form read too. docs/RUNTIMES.md says which --runtime fits.
+Its flags are the `new` questions and the `defaults` in skills/new-loop/questions.json, the spec the skill
+and the dashboard form read too. Only the `new` ones without a default are needed; --repo defaults to the
+checkout you're in, --name to its folder name and --outcome to the mission. docs/RUNTIMES.md says which
+--runtime fits.
 
 Writes, refusing to overwrite any of them:
   REPO/docs/loops/NAME.md         the charter, from the kit's docs/AGENT_LOOP.md, with its Good block filled
@@ -40,20 +42,23 @@ GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:*
 def args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--reschedule", action="store_true", help="move an existing loop to a new schedule or runtime")
-    for q in SPEC["new"]:
+    spec = SPEC["new"] + SPEC["defaults"]
+    for q in spec:
         p.add_argument(f"--{q['id']}", help=q["help"], type={"number": float, "integer": int}.get(q["kind"], str),
                        choices=[c["value"] for c in q.get("choices", [])] or None, action="append" if q.get("repeat") else "store",
                        default=[] if q.get("repeat") else None if "default" in q else "")
     a = p.parse_args()
     caps = old_caps(a.name) if a.reschedule and a.name else {}
-    for q in SPEC["new"]:  # a reschedule keeps the runner's caps unless given new ones
+    for q in spec:  # a reschedule keeps the runner's caps unless given new ones
         if "default" in q and getattr(a, q["id"]) is None:
             setattr(a, q["id"], caps.get(q["id"], q["default"]))
-    need = ("repo", "name", "runtime", "schedule") if a.reschedule else [q["id"] for q in SPEC["new"] if q["required"]]
+    need = ("name", "runtime", "schedule") if a.reschedule else [q["id"] for q in spec if q["required"]]
     missing = [f"--{n}" for n in need if not getattr(a, n.replace("-", "_"))]
     if missing:
         p.error("missing " + ", ".join(missing))
-    a.repo = Path(a.repo).expanduser().resolve()
+    a.repo = Path(a.repo or ".").expanduser().resolve()
+    a.name = a.name or re.sub(r"[^A-Za-z0-9_.-]+", "-", a.repo.name)
+    a.outcome = a.outcome or a.mission
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
         p.error("--name is letters, digits, _ . and -, and not you or nobody")

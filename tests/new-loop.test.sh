@@ -81,7 +81,11 @@ expect "--reschedule refuses a loop it doesn't know, before touching its files" 
 expect "--reschedule leaves other loops' files alone" "[ -e $AGENT_OPS_DIR/schedules/app-triage.cron ]"
 "$kit/bin/new-loop" --reschedule --repo "$s/app" --name growth --runtime launchd --schedule "0 7 * * *" >/dev/null
 expect "--reschedule keeps the runner's own caps, decimals included" "grep -q 'max-budget-usd 2.5' $AGENT_OPS_DIR/runners/growth.sh && grep -q 'max-turns 20' $AGENT_OPS_DIR/runners/growth.sh && [ ! -e $AGENT_OPS_DIR/schedules/growth.cron ]"
-expect "every question in the spec is a new-loop flag" "h=\$($kit/bin/new-loop --help); ! jq -r '.new[].id' $kit/skills/new-loop/questions.json | while read q; do grep -q -- \"--\$q \" <<<\"\$h\" || echo \$q; done | grep -q ."
+expect "every question and default in the spec is a new-loop flag" "h=\$($kit/bin/new-loop --help); ! jq -r '.new[].id, .defaults[].id' $kit/skills/new-loop/questions.json | while read q; do grep -q -- \"--\$q \" <<<\"\$h\" || echo \$q; done | grep -q ."
+need=$(jq -r '[.new[] | select(.required) | "--" + .id] | join(", ")' "$kit/skills/new-loop/questions.json")
+expect "a starter is asked only the spec's required questions" "[ \"\$($kit/bin/new-loop 2>&1 | tail -1)\" = \"new-loop: error: missing \$need\" ]"
+git init -q "$s/shop" && (cd "$s/shop" && "$kit/bin/new-loop" --mission "Answer every support email within a day." --source "the support inbox" --floor "unmeasured: no inbox access yet" --runtime cloud --schedule "0 8 * * *" --project Shop >/dev/null)
+expect "the essentials alone scaffold a loop, named after its repo, with the spec's default limits" "grep -qF \"\$(jq -r '.defaults[] | select(.id == \"limits\") | .default' $kit/skills/new-loop/questions.json)\" $s/shop/docs/loops/shop.md && grep -q '^- \*\*Outcome:\*\* Answer every support email within a day.' $s/shop/docs/loops/shop.md && grep -q '^| shop | Shop | cloud | routine:shop |' $AGENT_OPS_DIR/REGISTRY.md"
 expect "nothing was installed with launchctl or crontab" "[ ! -e $s/scheduled ]"
 
 if [ -f "$factory/fleet/fleet.py" ]; then
