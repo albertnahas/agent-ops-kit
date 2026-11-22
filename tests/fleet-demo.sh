@@ -7,6 +7,9 @@ cd "$(dirname "$0")/.."
 export AGENT_OPS_DIR=${1:-$(mktemp -d)}
 mkdir -p "$AGENT_OPS_DIR/fleet"
 echo "{\"launch_agents\": \"$AGENT_OPS_DIR/none\", \"refresh\": \"Demo data\"}" > "$AGENT_OPS_DIR/fleet.json"
+# Most loops are cloud routines; two are desktop-app tasks, and one is a launchd job, which shows as paused (not loaded here).
+runtime() { case $1 in fleet-sync|life-review) echo app;; app-beta) echo mac;; *) echo cloud;; esac; }
+job() { case $(runtime "$1") in app) echo "task:$1";; mac) echo "com.demo.$1";; *) echo "routine:$1";; esac; }
 day() { date -v-"$1"d +%FT0"$2":00:00 2>/dev/null || date -d "$1 days ago" +%FT0"$2":00:00; }
 
 loops=(
@@ -44,7 +47,7 @@ loops=(
 )
 {
   printf '## Registry\n\n| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by |\n|---|---|---|---|---|---|---|---|\n'
-  for l in "${loops[@]}"; do IFS='|' read -r name project by _ _ <<< "$l"; echo "| $name | $project | cloud | routine:$name | daily | | | $by |"; done
+  for l in "${loops[@]}"; do IFS='|' read -r name project by _ _ <<< "$l"; echo "| $name | $project | $(runtime "$name") | $(job "$name") | daily | | | $by |"; done
   printf '\n## Services\n\n| Service | Job | What it is |\n|---|---|---|\n| Fleet build | com.demo.fleet-build | rebuilds the dashboard |\n'
 } > "$AGENT_OPS_DIR/REGISTRY.md"
 {
@@ -59,9 +62,10 @@ loops=(
   done
   echo "{\"loop\":\"stray-script\",\"date\":\"$(day 1 6)\",\"subtype\":\"success\"}"
 } > "$AGENT_OPS_DIR/runs.jsonl"
-routines=$(for l in "${loops[@]}"; do IFS='|' read -r name _ _ _ _ <<< "$l"
-  enabled=$([ "$name" = app-beta ] && echo false || echo true)
-  printf '{"name":"%s","enabled":%s,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' "$name" "$enabled"; done)
-echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[${routines%,}],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
+routines=$(for l in "${loops[@]}"; do IFS='|' read -r name _ _ _ _ <<< "$l"; [ "$(runtime "$name")" = cloud ] || continue
+  printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' "$name"; done)
+tasks=$(for l in "${loops[@]}"; do IFS='|' read -r name _ _ _ _ <<< "$l"; [ "$(runtime "$name")" = app ] || continue
+  printf '{"id":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_finished_at":null},' "$name"; done)
+echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[${routines%,}],\"tasks\":[${tasks%,}]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
 python3 fleet/fleet.py >/dev/null
 echo "$AGENT_OPS_DIR/fleet/dashboard.html"
