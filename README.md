@@ -50,7 +50,7 @@ tests/hooks.test.sh && tests/ops.test.sh
 Every line should say `ok`. Then copy it into your repo:
 
 ```bash
-cp -R .claude bin checks docs scripts tests /path/to/your-repo/
+cp -R .claude bin checks docs fleet scripts tests /path/to/your-repo/
 ```
 
 ```bash
