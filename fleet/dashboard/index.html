@@ -560,9 +560,12 @@ dash.draw('svc-count', (e) => {
 });
 
 /* factory tab: each loop points at every name in its Checked by, or at Nobody when it has none. Loops that read
-   another's output are checkers; a name that is no loop is a checker the registry doesn't have. */
+   another's output are checkers; a name that is no loop is a checker the registry doesn't have. The page's scope picks
+   the loops, and every loop their output reaches comes too, so each chain stays whole. */
 const factoryGraph = (rows) => {
-  const loops = rows.filter((r) => !NOT_LOOP.includes(r.project));
+  const all = new Map(rows.filter((r) => !NOT_LOOP.includes(r.project)).map((r) => [r.loop, r]));
+  const mine = scoped([...all.values()]), loops = [...mine], keep = new Set(loops.map((r) => r.loop));
+  for (let k = 0; k < loops.length; k++) (loops[k].checked_by || []).forEach((c) => { if (all.has(c) && !keep.has(c)) { keep.add(c); loops.push(all.get(c)); } });
   const nodes = new Map(loops.map((r) => [r.loop, {id: r.loop, kind: 'loop', row: r}]));
   const edges = [];
   loops.forEach((r) => {
@@ -603,14 +606,14 @@ const factoryGraph = (rows) => {
     const path = []; for (let n = 'you'; n != null; n = prev.get(n)) path.unshift(n);
     return path;
   };
-  return {nodes, edges, outs, ins, order, groups, chain, route};
+  return {nodes, edges, outs, ins, order, groups, chain, route, mine};
 };
 const fname = (n) => n.kind === 'loop' ? nameOf(n.row) : n.kind === 'you' ? 'You' : n.kind === 'nobody' ? 'Nobody' : n.id;
 const fcurve = (x1, y1, x2, y2) => { const m = (x1 + x2) / 2; return `M${x1},${y1}C${m},${y1} ${m},${y2} ${x2},${y2}`; };
 
 dash.draw('factory-count', (e) => {
   const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
-  const g = factoryGraph(l.data), n = [...g.nodes.values()].filter((x) => x.kind === 'loop').length, gaps = g.ins('nobody').length;
+  const g = factoryGraph(l.data), n = g.mine.length, gaps = g.ins('nobody').length;
   e.textContent = n + (n === 1 ? ' loop' : ' loops') + ' · ' + (gaps ? gaps + ' nobody reads' : 'every one is read');
 });
 dash.draw('factory', (box) => {
