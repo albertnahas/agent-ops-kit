@@ -11,8 +11,9 @@ called with a subject and a body; unset, it prints them), then logs its own line
 when the notifier failed. If $AGENT_OPS_DIR is itself a git repo with a remote, it commits
 runs.jsonl and COSTS.md, nothing else, and pushes (runs.jsonl merges as a union, so two writers
 never conflict), so a second watchman in the cloud can check that line is fresh
-(examples/heartbeat-watch-prompt.md); a failed sync logs a fail line. A ledger line that isn't a run (no loop name, a date that isn't one or is in the
-future, bytes that aren't UTF-8) is skipped with an alert, never a crash."""
+(examples/heartbeat-watch-prompt.md); a failed sync logs a fail line and leaves local edits as they were.
+A ledger line that isn't a run (no loop name, a date that isn't one or is in the future, bytes that aren't
+UTF-8) is skipped with an alert, never a crash."""
 import datetime as dt, json, os, re, shlex, subprocess
 from pathlib import Path
 
@@ -115,8 +116,11 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
         attrs.parent.mkdir(exist_ok=True)
         with attrs.open("a") as f: f.write("runs.jsonl merge=union\n")
     git("add", "--", LEDGER.name, "COSTS.md"); git("commit", "-qm", f"heartbeat {now:%F}")  # only these: state and outputs stay local
-    sync = git("pull", "-q", "--rebase", "--autostash")
-    if sync.returncode: git("rebase", "--abort")
+    head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
+    clash = not sync.returncode and git("ls-files", "-u").stdout  # the pull went through, but local edits clash with it
+    if clash: git("reset", "-q", "--hard", head); git("stash", "pop", "-q")  # so put the tree back as it was
+    elif sync.returncode: git("rebase", "--abort")
     else: sync = git("push", "-q")
-    if sync.returncode: log("fail", "the ops repo didn't sync: " + next((l for l in sync.stderr.splitlines() if l.startswith(("fatal:", "error:"))), sync.stderr.strip()[-200:])[:200])
+    if clash: log("fail", "the ops repo didn't sync: local edits clash with the remote, so they were left as they were")
+    elif sync.returncode: log("fail", "the ops repo didn't sync: " + next((l for l in sync.stderr.splitlines() if l.startswith(("fatal:", "error:"))), sync.stderr.strip()[-200:])[:200])
 print(json.dumps({"alerts": list(alerts), "sent": [] if undelivered else list(due)}))
