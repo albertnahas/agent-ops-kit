@@ -59,6 +59,8 @@ expect "an empty .git inside never commits the enclosing repo" "AGENT_OPS_DIR=$r
 rm -rf "$r"
 
 # mission-guard: bless what's on the default branch (master here, to prove it isn't assumed), then catch drift
+# bless needs a terminal, so the tests type into a pseudo-terminal: <answer> <command...>
+tty() { python3 -c 'import os, subprocess, sys; m, s = os.openpty(); os.write(m, (sys.argv[1] + "\n").encode()); sys.exit(subprocess.call(sys.argv[2:], stdin=s))' "$@"; }
 g=$(mktemp -d); git init -q --bare -b master "$g/origin.git"; git clone -q "$g/origin.git" "$g/w" 2>/dev/null
 c() { git -C "$g/w" -c user.name=t -c user.email=t@t "$@"; }
 printf '# C\n<!-- mission -->\nNever lower a baseline.\n<!-- /mission -->\nsteps\n' > "$g/w/C.md"
@@ -67,7 +69,7 @@ c add . && c commit -qm c && c push -q origin HEAD:master
 expect "mission-guard refuses a file with no blocks" "! bin/mission-guard bless $g/w/N.md 2>/dev/null"
 expect "mission-guard refuses an unclosed block" "! bin/mission-guard bless $g/w/U.md 2>/dev/null"
 expect "a failed bless records nothing" "[ ! -e $AGENT_OPS_DIR/missions.json ]"
-bin/mission-guard bless "$g/w/C.md" >/dev/null
+tty C.md bin/mission-guard bless "$g/w/C.md" >/dev/null
 expect "mission-guard check is clean after bless" "bin/mission-guard check | grep -q '^1 of 1 charters clean'"
 sed -i.bak 's/Never lower/Always lower/' "$g/w/C.md" && rm "$g/w/C.md.bak"
 expect "mission-guard won't bless an unpushed edit" "! bin/mission-guard bless $g/w/C.md 2>/dev/null"
@@ -85,7 +87,7 @@ expect "heartbeat alerts on mission drift, keyed by the charter" "jq -e '.alerts
 cp $AGENT_OPS_DIR/missions.json $AGENT_OPS_DIR/m.bak; echo '{' > $AGENT_OPS_DIR/missions.json
 expect "a broken missions.json is a guard failure, not drift" "bin/heartbeat.py | tail -1 | jq -e '.alerts | index(\"mission-guard\")' >/dev/null"
 mv $AGENT_OPS_DIR/m.bak $AGENT_OPS_DIR/missions.json
-bin/mission-guard bless "$g/w/C.md" >/dev/null
+tty C.md bin/mission-guard bless "$g/w/C.md" >/dev/null
 expect "a bless after the push clears it" "bin/mission-guard check >/dev/null"
 o=$(mktemp -d); git clone -q "$g/origin.git" "$o/c" 2>/dev/null; mkdir -p "$o/c/docs/orders"
 printf '# Orders\n| Order | Moves | Stop rule | Read date |\n|---|---|---|---|\n\n## Changes\n\ndate | why | by\n2026-11-22 | created | you\n' > "$o/c/docs/orders/x.md"
@@ -94,13 +96,13 @@ python3 - "$o/c/docs/orders/x.md" <<'PY'
 import sys; p=sys.argv[1]; s=open(p).read()
 open(p,'w').write(s.replace("|---|---|---|---|\n","|---|---|---|---|\n| Ship a page | visits | none | 2026-12-01 |\n")+"2026-11-23 | new order | sup |\n")
 PY
-expect "mission-guard orders passes one order with one Changes line" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+expect "mission-guard orders refuses a new Order, even with its Changes line" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 echo "2026-11-23 | another | sup |" >> "$o/c/docs/orders/x.md"
 expect "mission-guard orders refuses two Changes lines" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 git -C "$o/c" checkout -q -- . ; echo x > "$o/c/README.md"; git -C "$o/c" add -A
 expect "mission-guard orders refuses a non-Orders file" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 git -C "$o/c" reset -q --hard; git -C "$o/c" clean -qf; cp examples/orders.md "$o/c/docs/orders/new.md"; git -C "$o/c" add -A
-expect "mission-guard orders passes a new Orders file from the example" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+expect "mission-guard orders refuses a new Orders file" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 rm "$o/c/docs/orders/new.md"; mkdir -p "$o/c/.github/workflows"; echo on: push > "$o/c/.github/workflows/ci.yml"
 git -C "$o/c" add . && git -C "$o/c" -c user.name=t -c user.email=t@t commit -qm ci && git -C "$o/c" push -q origin HEAD:master
 git -C "$o/c" mv .github/workflows/ci.yml .github/ci.yml
@@ -135,7 +137,7 @@ reset; perl -0pi -e 's/Do the thing./Merge every PR./; s/## Changes/## Changes\n
 expect "mission-guard orders refuses a second Changes heading" "[ \$(guard orders) = 1 ]"
 reset; perl -0pi -e 's/Do the thing./Merge every PR./' "$h/w/docs/orders/a.md"; echo x >> "$h/w/docs/orders/a.md"
 expect "mission-guard orders refuses an undated Changes line" "[ \$(guard orders) = 1 ]"
-reset; perl -0pi -e 's/Do the thing./Do the other thing./' "$h/w/docs/orders/a.md"; echo '2026-11-20 | new thing | sup' >> "$h/w/docs/orders/a.md"; hc commit -qam o
+reset; echo '2026-11-20 | kept | sup' >> "$h/w/docs/orders/a.md"; hc commit -qam o
 hc checkout -q main; sed -i.b 's/Never merge/Always merge/' "$h/w/docs/C.md"; rm "$h/w/docs/C.md.b"; hc commit -qam main-moved; hc push -q origin HEAD:main; hc checkout -q pr
 expect "mission-guard orders judges a stale PR from its merge-base" "[ \$(guard orders) = 0 ]"
 expect "mission-guard pr doesn't blame a stale PR for main's mission edit" "[ \$(guard pr) = 0 ]"
@@ -144,5 +146,35 @@ expect "mission-guard check calls an empty store unguarded" "AGENT_OPS_DIR=$s bi
 rm "$s/missions.json"
 expect "mission-guard check calls a missing store unguarded" "AGENT_OPS_DIR=$s bin/mission-guard check >/dev/null; [ \$? = 2 ]"
 rm -rf "$h" "$s"
+
+# X rules: author gate, bless at a terminal, append-only Orders, @imports, the Supervisor line
+a=$(mktemp -d); mkdir "$a/bin"
+printf '#!/bin/sh\ncase "$*" in "pr view"*) echo "$GH_LOGIN";; *permission*) [ -n "$GH_PERM" ] && echo "$GH_PERM" || exit 1;; esac\n' > "$a/bin/gh"; chmod +x "$a/bin/gh"
+gate() { PATH="$a/bin:$PATH" GH_LOGIN=$1 GH_PERM=$2 bin/mission-guard author 7 >/dev/null; echo $?; }
+expect "mission-guard author passes a collaborator who can push" "[ \$(gate me write) = 0 ]"
+expect "mission-guard author makes a read-only stranger X" "[ \$(gate stranger read) = 1 ]"
+expect "mission-guard author fails closed when it can't read access" "[ \$(gate me '') = 2 ]"
+h=$(mktemp -d); git init -q --bare -b main "$h/o.git"; git clone -q "$h/o.git" "$h/w" 2>/dev/null; mkdir -p "$h/w/docs/orders" "$h/w/docs/rules"
+printf '<!-- mission -->\nNever merge X.\n<!-- /mission -->\n' > "$h/w/docs/C.md"
+printf 'See @docs/rules/style.md and `@docs/rules/code.md`.\n' > "$h/w/CLAUDE.md"; printf 'Then @deep.md\n' > "$h/w/docs/rules/style.md"
+echo deep > "$h/w/docs/rules/deep.md"; echo code > "$h/w/docs/rules/code.md"; cp examples/orders.md "$h/w/docs/orders/a.md"
+hc() { git -C "$h/w" -c user.name=t -c user.email=t@t "$@"; }
+hc add -A && hc commit -qm base && hc push -q origin HEAD:main
+guard() { (cd "$h/w" && "$OLDPWD/bin/mission-guard" "$@" >/dev/null); echo $?; }
+reset() { hc checkout -q -f main && hc clean -qfd; hc checkout -q -B pr main; }
+expect "mission-guard bless refuses without a terminal" "! bin/mission-guard bless $h/w/docs/C.md </dev/null >/dev/null 2>&1"
+expect "mission-guard bless refuses a wrong retyped name" "! tty X.md bin/mission-guard bless $h/w/docs/C.md >/dev/null 2>&1 && ! grep -q '$h/w/docs/C.md' $AGENT_OPS_DIR/missions.json"
+reset; echo '2026-11-23 | kept | sup' >> "$h/w/docs/orders/a.md"; hc commit -qam o
+expect "mission-guard pr passes one appended dated Orders line" "[ \$(guard pr) = 0 ]"
+reset; sed -i.b 's/300 to 900/300 to 9000/' "$h/w/docs/orders/a.md"; rm "$h/w/docs/orders/a.md.b"; echo '2026-11-23 | raise | sup' >> "$h/w/docs/orders/a.md"; hc commit -qam o
+expect "mission-guard pr makes a logged Orders body change X" "[ \$(guard pr) = 1 ]"
+reset; cp examples/orders.md "$h/w/docs/orders/b.md"; hc add -A; hc commit -qm o
+expect "mission-guard pr makes a new Orders file X" "[ \$(guard pr) = 1 ]"
+reset; echo more >> "$h/w/docs/rules/deep.md"; hc commit -qam i
+expect "mission-guard pr protects a file CLAUDE.md imports, two hops down" "[ \$(guard pr) = 1 ]"
+reset; echo more >> "$h/w/docs/rules/code.md"; hc commit -qam i
+expect "mission-guard pr ignores an @path inside code" "[ \$(guard pr) = 0 ]"
+expect "the Orders template locks its Supervisor line in a mission block" "grep -A1 '^<!-- mission -->' examples/orders.md | grep -q '^Supervisor:'"
+rm -rf "$a" "$h"
 
 exit $fail

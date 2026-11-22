@@ -1,6 +1,10 @@
 # Orders: myapp-growth
 
-Supervisor: myapp-daily-ops, Mondays. The loop reads this right after its charter, whose `mission` blocks outrank every line here. It adds lines only for tests it starts itself and closes its own; for anything else it writes an Orders request in its report.
+<!-- mission -->
+Supervisor: myapp-daily-ops, Mondays.
+<!-- /mission -->
+
+The loop reads this right after its charter, whose `mission` blocks outrank every line here. It asks for changes in its report as Orders requests. Only Changes grows without a human: one dated line appended per PR. Any other change here is X.
 
 | Order | Moves | Stop rule | Read date |
 |---|---|---|---|

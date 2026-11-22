@@ -26,7 +26,7 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 /plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
 ```
 
-It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook, and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
+It puts `claude-run`, `ops-check` and `heartbeat.py` on your path. The charter, the grader, the hooks and the checks belong in your repo, so copy them in as below. The grader stays a copy rather than a plugin agent because its Bash limit is a frontmatter hook (`.claude/hooks/grader-bash.sh`), and Claude Code ignores frontmatter hooks on agents loaded from a plugin.
 
 ## Try it in 5 minutes
 
@@ -63,7 +63,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | File | What it does |
 |---|---|
 | `docs/AGENT_LOOP.md` | The charter: mission, kill switch, data sources, KPIs, the graded merge policy, what each run does and the report format. The agent's only instruction set. |
-| `.claude/agents/pr-grader.md` | The grader. A frontmatter hook limits its Bash to `gh pr view` and `gh pr diff`. |
+| `.claude/agents/pr-grader.md` | The grader. A frontmatter hook (`.claude/hooks/grader-bash.sh`) limits its Bash to reading one PR with `-R owner/repo`, checking it out, running its tests and posting one grade comment. |
 | `.claude/hooks/guard-bash.sh` | Blocks force pushes and pushes to main, so the agent works through PRs. |
 | `.claude/settings.json` | Wires the guard with `onFailure: block`, so a broken hook stops the call instead of letting it through. Adds deny rules. |
 | `scripts/run.sh` | Runs one loop with turn and budget caps, after checking the charter's pause line, and ends with the outcome check. |
@@ -71,7 +71,7 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
 | `checks/report-landed.sh` | Example check: today's report landed, on main or its PR branch, with every section. Write one per loop; it's the only definition of "done" that doesn't trust the agent. |
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop, a run over 3x its usual cost or a charter's mission blocks changing, at most every 3 days per alert. Writes `COSTS.md`. |
-| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes, and exits 2 when no charter is recorded; `pr` makes a PR X if, since its merge-base with the default branch, it changes those blocks or a protected path: any `.claude/` folder, any `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md`, `.mcp.json`, `.husky/`, CI workflows and actions, the runner and its checks, or the guard itself; `orders` checks an Orders-only PR against the same merge-base. Product repos keep a copy at `scripts/mission-guard`, and `examples/mission-guard.yml` runs it as a required check. |
+| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes, and exits 2 when no charter is recorded; `pr` makes a PR X if, since its merge-base with the default branch, it changes those blocks or a protected path: any `.claude/` folder, any `CLAUDE.md`, `CLAUDE.local.md` or `AGENTS.md`, `.mcp.json`, `.husky/`, CI workflows and actions, the runner and its checks, or the guard itself, and an Orders file that gains more than one appended dated Changes line, or a file an agent file imports with `@`; `orders` checks an Orders-only PR against the same merge-base; `author <n>` exits 1 unless the PR's author can push to the repo; `bless` needs you at a terminal, retyping the file names. Product repos keep a copy at `scripts/mission-guard`, and `examples/mission-guard.yml` runs it as a required check. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
 | `tests/` | Feeds known commands to both hooks, and fixture ledgers to `ops-check` and the heartbeat. |
