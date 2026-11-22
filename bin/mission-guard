@@ -144,7 +144,7 @@ def pr():
         if (f.read_text() if f.is_file() else None) != (base.stdout if base.returncode == 0 else None):
             hits += 1
             print(f"{rel}: this checkout changes the mission guard itself. Grade X.")
-    print(f"{hits} of {len(files)} charter(s) with changed mission blocks, or the guard changed")
+    print(f"{hits} hit(s) across {len(files)} charter(s) and the guard")
     return 1 if hits else 0
 
 
