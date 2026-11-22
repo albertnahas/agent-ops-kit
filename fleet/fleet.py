@@ -41,35 +41,45 @@ def table(md, heading):
 
 # --- schedules: launchd calendar dicts and crons share one form, {Minute, Hour, Day, Month, Weekday} -> sets
 
-def cron_spec(expr):
+NAMES = {n: i for i, n in enumerate(["sun", "mon", "tue", "wed", "thu", "fri", "sat"])} | \
+        {n: i + 1 for i, n in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+
+def cron_spec(expr, both=False):
+    """Cron's rule: with both day of month and weekday restricted, either one matching fires. both=True makes it
+    both, for registry overrides that describe what a runner really does ("first Monday": `0 8 1-7 * 1`)."""
     expr = re.sub(r"^CRON_TZ=\S+\s+", "", expr.strip())
+    num = lambda s: NAMES[s.lower()[:3]] if s[:1].isalpha() else int(s)
     def field(f, lo, hi):
         if f == "*": return None
         out = set()
         for part in f.split(","):
             rng, _, step = part.partition("/")
             a, _, b = rng.partition("-")
-            a, b = (lo, hi) if a == "*" else (int(a), int(b or (hi if step else a)))
+            a, b = (lo, hi) if a == "*" else (num(a), num(b) if b else (hi if step else num(a)))
+            if b < a and hi == 7: b += 7  # weekdays wrap: sat-sun
             out |= set(range(a, b + 1, int(step or 1)))
         return out
     m, h, d, mo, wd = expr.split()[:5]
     return [{"Minute": field(m, 0, 59), "Hour": field(h, 0, 23), "Day": field(d, 1, 31),
-             "Month": field(mo, 1, 12), "Weekday": {w % 7 for w in field(wd, 0, 7)} if wd != "*" else None}]
+             "Month": field(mo, 1, 12), "Weekday": {w % 7 for w in field(wd, 0, 7)} if wd != "*" else None,
+             "either": not both and d != "*" and wd != "*"}]
 
 def plist_spec(cal):
     return [{k: ({c[k] % 7} if k == "Weekday" else {c[k]}) if k in c else None
              for k in ("Minute", "Hour", "Day", "Month", "Weekday")} for c in (cal if isinstance(cal, list) else [cal])]
 
 def fires(spec, start, direction, days=70):
-    """Scheduled times after (direction 1) or before (-1) start, nearest first. Day and Weekday must both match."""
+    """Scheduled times after (direction 1) or before (-1) start, nearest first. Day and Weekday must both match,
+    unless the spec says either (a crontab line restricting both). A missing Minute or Hour is every one."""
     day = start.replace(hour=0, minute=0, second=0, microsecond=0)
     for i in range(days):
         d = day + dt.timedelta(days=i * direction)
         ts = sorted({d.replace(hour=h, minute=m)
                      for s in spec
-                     if (s["Month"] is None or d.month in s["Month"]) and (s["Day"] is None or d.day in s["Day"])
-                     and (s["Weekday"] is None or d.isoweekday() % 7 in s["Weekday"])
-                     for h in (s["Hour"] or range(24)) for m in (s["Minute"] or [0])}, reverse=direction < 0)
+                     if (s["Month"] is None or d.month in s["Month"])
+                     and ((d.day in s["Day"] or d.isoweekday() % 7 in s["Weekday"]) if s.get("either") else
+                          (s["Day"] is None or d.day in s["Day"]) and (s["Weekday"] is None or d.isoweekday() % 7 in s["Weekday"]))
+                     for h in (s["Hour"] or range(24)) for m in (s["Minute"] or range(60))}, reverse=direction < 0)
         yield from (t for t in ts if (t > start if direction > 0 else t <= start))
 
 def nth(gen, n):
@@ -201,7 +211,7 @@ def build():
                 row["last_run"] = iso(dt.datetime.fromisoformat(item["last_finished_at"].replace("Z", "+00:00")).astimezone().replace(tzinfo=None))
                 row["result"] = "pass" if item.get("last_status") == "succeeded" else "fail"
                 row["detail"] = f"routine run {item.get('last_status')}"
-        if override: spec = cron_spec(override.group(1))
+        if override: spec = cron_spec(override.group(1), both=True)
         if spec and not (row["next_due"] and kind != "local"):
             row["next_due"] = iso(nth(fires(spec, now, 1), 0))
         if not spec and not row["next_due"]:

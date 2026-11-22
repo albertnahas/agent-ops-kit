@@ -4,7 +4,7 @@ Every scheduled loop you run, one row each. `fleet/fleet.py` reads the two table
 
 - **Loop** is the name it logs under (`OPS_LOOP`); for a cloud routine that doesn't log, the routine's name. A check script at `<checks>/<Loop>.py` is run by the builder when the loop writes no ledger line.
 - **Job** is what triggers it: a launchd label, `cron:<script name>` (a crontab line), `routine:<name>` (Claude Code cloud routine) or `task:<id>` (desktop-app scheduled task).
-- **Schedule** is for people. A cron in backticks overrides the job's own trigger, for runners that skip some fires.
+- **Schedule** is for people. A cron in backticks overrides the job's own trigger, for runners that skip some fires. In an override, a day of month and a weekday must both match (`0 8 1-7 * 1` is the first Monday); crontab itself fires on either.
 - **Checked by** is who reads its output after its check passes: other loops by name, `heartbeat`, or `you`, comma-separated. `docs/LOOP_CATALOG.md` says who usually does for each kind of loop.
 - **Project** groups the dashboard; leave it empty for loops that serve no one project (they show under General).
 
