@@ -28,6 +28,7 @@ INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "
            **{str(p.relative_to(KIT)): str(p.relative_to(KIT)) for d in (".claude/agents", ".claude/hooks")
               for p in sorted((KIT / d).iterdir())}}
 GENERIC = {"letter", "number", "journey", "file", "name", "n", "how", "what"}  # template words that stay as written
+cell = lambda v: str(v).replace("|", "\\|")  # a | inside a markdown table cell
 LEVEL = r"(at least|at most)\s+[\d,]*\.?\d+"
 GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:**\n- **Check:**\n"
         "<!-- /mission -->\n\n")  # #22's block, for a template that predates it
@@ -73,13 +74,14 @@ def calendar(cron):
 
 
 def fill(template, a, charter):
-    """The kit's charter with this loop's words in it, or exit naming a placeholder it doesn't know."""
+    """The kit's charter with this loop's words in it, or exit naming a placeholder it doesn't know. The words go in
+    as numbered tokens first, so the scan sees only the template, never a < or > the user typed."""
     text = template if "\n## Good\n" in template else template.replace("## Kill switch", GOOD + "## Kill switch", 1)
     stop = {"launchd": f"`launchctl bootout gui/$(id -u)/{label(a)}`",
             "cron": f"`crontab -l | grep -v 'runners/{a.name}.sh' | crontab -`",
             "cloud": f"disable the routine `{a.name}` at claude.ai/code/routines"}[a.runtime]
     check = f"$AGENT_OPS_DIR/checks/{a.name}.py"
-    surfaces = "".join(f"- {s}\n" for s in a.x_surface)
+    surfaces, values = "".join(f"- {s}\n" for s in a.x_surface), []
     for pattern, value in [
             (r"^# <Project>", f"# {a.name}"),
             (r"docs/orders/<name>\.md", f"docs/orders/{a.name}.md"),
@@ -92,15 +94,16 @@ def fill(template, a, charter):
             (r"^- \*\*Check:\*\*.*$", f"- **Check:** `{check}`, measuring `{a.measure}`: exists" if a.measure
              else f"- **Check:** `{check}`: exists, checking the report only until the Floor is measured"),
             (r"^- <source>: .*$", f"- {a.source}: `{a.measure}`" if a.measure else f"- {a.source}"),
-            (r"^\| <metric> .*$", f"| {a.outcome} | {a.floor} | below the Floor |"),
+            (r"^\| <metric> .*$", f"| {cell(a.outcome)} | {cell(a.floor)} | below the Floor |"),
             (r"^- <your own surfaces>\n", surfaces),
             (r" <Add yours\.>", "")]:
-        text = re.sub(pattern, value.replace("\\", "\\\\"), text, count=1, flags=re.M)
+        text = re.sub(pattern, f"\0{len(values)}\0", text, count=1, flags=re.M)
+        values.append(value)
     text = text.replace("docs/ops-reports/", f"docs/ops-reports/{a.name}/").replace("ops/YYYY-MM-DD-report", f"ops/{a.name}-YYYY-MM-DD-report")
     left = sorted({m for m in re.findall(r"<([^<>!/][^<>]*)>", text) if m not in GENERIC})
     if left:
         sys.exit(f"docs/AGENT_LOOP.md has placeholders new-loop doesn't fill: <{'>, <'.join(left)}>. Update bin/new-loop.")
-    return text
+    return re.sub("\0(\\d+)\0", lambda m: values[int(m.group(1))], text)
 
 
 def orders(template, a):
@@ -125,7 +128,7 @@ def registry_row(a, charter):
     check = f"report and Floor (`checks/{a.name}.py`)"
     cells = [a.name, a.project, runtime, job, a.schedule, f"`{charter}`", check, a.checked_by,
              a.supervisor, a.escalates_to, a.role]
-    return "| " + " | ".join(cells) + " |"
+    return "| " + " | ".join(map(cell, cells)) + " |"
 
 
 def register(row, name):
@@ -194,7 +197,9 @@ def main():
     reg = register(registry_row(a, charter.relative_to(a.repo)), a.name)
     mine = [str(f.relative_to(a.repo)) for f in files if a.repo in f.parents]
     guarded = [f for f in mine if "<!-- mission -->" in files[a.repo / f]]
-    print("\n".join([f"wrote {f}" for f in files] + [f"copied {d} into {a.repo}" for d in copied] + [f"added {a.name} to {reg}", "",
+    kept = [] if "guard-bash.sh" in (a.repo / ".claude/settings.json").read_text() else [
+        f"kept {a.repo}/.claude/settings.json: merge the kit's PreToolUse guard hook and deny rules into it by hand, or the guard isn't wired"]
+    print("\n".join([f"wrote {f}" for f in files] + [f"copied {d} into {a.repo}" for d in copied] + kept + [f"added {a.name} to {reg}", "",
           "Next:",
           f"1. Dry run the check: python3 {sh(check)}",
           f"2. Land the repo files on the default branch through a PR: {', '.join(mine + copied)}",
