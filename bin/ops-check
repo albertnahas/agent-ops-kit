@@ -11,7 +11,7 @@ LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^(0?|application\..*)$ ]] &
 [ "$1" = "--" ] && shift
 [ $# -gt 0 ] || { echo "ops-check: no check command, so nothing to pass" >&2; exit 2; }
 out=$("$@" 2>&1); code=$?
-crash=$(grep -F "\"loop\":\"$LOOP\"" "$OPS/runs.jsonl" 2>/dev/null | tail -1 | jq -r 'select(has("check") | not) | select(.exit != 0 or .is_error == true) | "claude run at \(.date) crashed (exit \(.exit))"')
+crash=$(grep -F "\"loop\":\"$LOOP\"" "$OPS/runs.jsonl" 2>/dev/null | tail -1 | jq -r 'select(has("check") | not) | select(.exit != 0 or .is_error == true) | "claude run at \(.date) crashed (exit \(.exit))"' 2>/dev/null)
 [ -n "$crash" ] && { out="$out"$'\n'"$crash"; code=1; }
 [ -s "$OPS/runs.jsonl" ] && [ -n "$(tail -c1 "$OPS/runs.jsonl")" ] && echo >> "$OPS/runs.jsonl"  # never glue onto a cut line
 status=$([ $code -eq 0 ] && echo pass || echo fail)
