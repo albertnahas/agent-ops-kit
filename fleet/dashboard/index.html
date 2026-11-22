@@ -3,7 +3,8 @@
 /* Control panel, narrow-first: tabs (Overview, Loops, Waiting), one status line, four numbers, short lists that open for detail. */
 .fx [hidden] { display: none !important; }
 .fx { display: grid; gap: var(--cds-gap-md); font-family: var(--font-anthropic-sans); color: var(--color-fg); font-size: var(--cds-font-size-body); }
-.fx-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cds-gap-sm); }
+.fx-top { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); }
+.fx-top .dash-select { min-width: 0; max-width: 50%; }
 .fx-top h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 600; letter-spacing: -.01em; font-size: var(--cds-font-size-title); }
 .fx-muted { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 0; }
 
@@ -116,8 +117,8 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
 
 <div class="fx">
   <div class="fx-top" id="top">
-    <h1>Loop fleet</h1>
-    <p class="fx-muted">Updated <span data-draw="synced">—</span></p>
+    <div><h1>Loop fleet</h1><p class="fx-muted">Updated <span data-draw="synced">—</span></p></div>
+    <select class="dash-select" id="scope" data-draw="scope" aria-label="Project" data-source="loops waiting"></select>
   </div>
 
   <div class="fx-tabs" role="tablist" aria-label="Views">
@@ -172,6 +173,8 @@ const FX = window.FX = window.FX || {filter: 'all', open: new Set()};
 const NOT_LOOP = ['Service', 'One-off'];
 const URGENT = ['failing', 'silent', 'unregistered', 'chronic', 'stale'];
 const GAPS = ['no check', 'no runs yet'];
+/* the project picked at the top: every count, list and tab shows its rows only; '' is all of them */
+const scoped = (rows, {project} = dash.params()) => rows.filter((r) => !project || r.scope === project);
 const LABEL = {failing: 'Failing', silent: 'Silent', unregistered: 'Unregistered', chronic: 'Flaky', stale: 'Stale data',
   'no check': 'Unchecked', 'no runs yet': 'Not run yet', healthy: 'Healthy', paused: 'Paused', service: 'Running', 'one-off': 'One-off'};
 const TONE = {failing: 'bad', silent: 'bad', unregistered: 'warn', chronic: 'warn', stale: 'warn', 'no check': 'none', 'no runs yet': 'none',
@@ -179,9 +182,10 @@ const TONE = {failing: 'bad', silent: 'bad', unregistered: 'warn', chronic: 'war
 
 dash.calc('counts', {
   title: 'Loop counts',
-  description: 'Loops running (registered, not paused), healthy, failing or silent, needing a look (failing, silent, unregistered, flaky or stale, plus failing services), with no outcome check, items waiting on you, and those due within two days.',
+  description: 'In the project picked at the top: loops running (registered, not paused), healthy, failing or silent, needing a look (failing, silent, unregistered, flaky or stale, plus failing services), with no outcome check, items waiting on you, and those due within two days.',
   inputs: ['loops', 'waiting'],
   fn: (loops, waiting) => {
+    loops = scoped(loops, dash.params()); waiting = scoped(waiting, dash.params());
     const real = loops.filter((r) => !['Service', 'One-off'].includes(r.project));
     const by = (...s) => real.filter((r) => s.includes(r.status)).length;
     const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
@@ -198,9 +202,9 @@ dash.calc('counts', {
 });
 dash.calc('cost', {
   title: 'Claude cost, 30 days',
-  description: 'Sum of every loop\'s API-equivalent cost estimate from runs.jsonl over the window in the footer.',
+  description: 'Sum of the API-equivalent cost estimate from runs.jsonl of every loop in the project picked at the top, over the window in the footer.',
   inputs: ['loops'],
-  fn: (loops) => Math.round(loops.reduce((s, r) => s + (Number(r.cost) || 0), 0)),
+  fn: (loops) => Math.round(scoped(loops, dash.params()).reduce((s, r) => s + (Number(r.cost) || 0), 0)),
 });
 
 /* helpers; icons are Lucide paths */
@@ -353,6 +357,14 @@ dash.draw('synced', (e) => { const v = metaOf('Built'); e.textContent = v ? rel(
 dash.draw('window', (e) => { e.textContent = metaOf('Pass rate and cost window') || '—'; });
 dash.draw('refresh', (e) => { e.textContent = metaOf('Refresh') || 'Rebuilt by fleet.py'; });
 dash.draw('registry', (e) => { e.textContent = metaOf('Registry') || '—'; });
+dash.draw('scope', (sel) => {
+  const l = dash.data('loops'), w = dash.data('waiting'), {project = ''} = dash.params();
+  const all = new Set([...l.data, ...w.data, {scope: project}].map((r) => r.scope).filter(Boolean)); /* a pick that left the data still shows */
+  const projects = [...all].filter((p) => p !== 'General').sort((a, b) => a.localeCompare(b));
+  sel.replaceChildren(new Option('All projects', ''), ...(all.has('General') ? [new Option('General')] : []), ...projects.map((p) => new Option(p)));
+  sel.value = project;
+  sel.onchange = () => dash.setParams({project: sel.value});
+});
 dash.draw('badge-loops', (e) => { const n = countOf('attention'); e.textContent = n ? n : ''; });
 dash.draw('badge-waiting', (e) => { const n = countOf('waiting'); e.textContent = n ? n : ''; });
 
@@ -384,9 +396,9 @@ dash.draw('attn-list', (box) => {
   const l = dash.data('loops');
   box.replaceChildren();
   if (l.status !== 'ok') return failed(box, 'loop list', l.status);
-  const urgent = l.data.filter((r) => (!NOT_LOOP.includes(r.project) && URGENT.includes(r.status)) || (r.project === 'Service' && r.status === 'failing'))
+  const urgent = scoped(l.data).filter((r) => (!NOT_LOOP.includes(r.project) && URGENT.includes(r.status)) || (r.project === 'Service' && r.status === 'failing'))
     .sort((a, b) => URGENT.indexOf(a.status) - URGENT.indexOf(b.status));
-  const gaps = l.data.filter((r) => !NOT_LOOP.includes(r.project) && GAPS.includes(r.status));
+  const gaps = scoped(l.data).filter((r) => !NOT_LOOP.includes(r.project) && GAPS.includes(r.status));
   const ul = el('ul', 'fx-list');
   if (!urgent.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', 'Nothing is failing, flaky or unregistered.')); ul.append(li); }
   urgent.forEach((r) => {
@@ -406,29 +418,25 @@ dash.draw('next-list', (ul) => {
   const w = dash.data('waiting');
   ul.replaceChildren();
   if (w.status !== 'ok') return failed(ul, 'waiting list', w.status);
-  const next = w.data.filter((r) => r.due).slice(0, 5);
+  const next = scoped(w.data).filter((r) => r.due).slice(0, 5);
   if (!next.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', 'Nothing dated waits on you.')); ul.append(li); return; }
   next.forEach((r) => ul.append(waitRow(r, 'n:')));
 });
 
 /* loops tab */
 dash.draw('loop-filter', (sel) => {
-  const l = dash.data('loops');
-  const projects = l.status === 'ok' ? [...new Set(l.data.filter((r) => !NOT_LOOP.includes(r.project) && r.project !== 'Unregistered').map((r) => r.project))].sort() : [];
-  sel.replaceChildren(new Option('All loops', 'all'), new Option('Needs a look', 'attention'), new Option('No outcome check', 'unchecked'),
-    ...projects.map((p) => new Option(p, 'p:' + p)));
+  sel.replaceChildren(new Option('All loops', 'all'), new Option('Needs a look', 'attention'), new Option('No outcome check', 'unchecked'));
   sel.value = FX.filter;
   sel.onchange = () => { FX.filter = sel.value; dash.draw('loop-list'); dash.draw('loop-count'); };
 });
-const loopFilter = (r) => FX.filter === 'all' ? true : FX.filter === 'attention' ? URGENT.includes(r.status)
-  : FX.filter === 'unchecked' ? GAPS.includes(r.status) : r.project === FX.filter.slice(2);
+const loopFilter = (r) => FX.filter === 'attention' ? URGENT.includes(r.status) : FX.filter === 'unchecked' ? GAPS.includes(r.status) : true;
 /* one card per project, General for loops with none; the projects with the most to look at come first */
 dash.draw('loop-list', (box) => {
   const l = dash.data('loops');
   box.replaceChildren();
   if (l.status !== 'ok') return failed(box, 'loop list', l.status);
   const order = [...URGENT, ...GAPS, 'healthy', 'paused'];
-  const rows = l.data.filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r))
+  const rows = scoped(l.data).filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r))
     .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || nameOf(a).localeCompare(nameOf(b)));
   if (!rows.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'No loops match.')); box.append(d); return; }
   const groups = groupBy(rows, (r) => r.project || 'General');
@@ -447,14 +455,16 @@ dash.draw('loop-list', (box) => {
 });
 dash.draw('loop-count', (e) => {
   const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
-  const n = l.data.filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r)).length;
+  const n = scoped(l.data).filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r)).length;
   e.textContent = n + (n === 1 ? ' loop' : ' loops');
 });
 dash.draw('svc-list', (ul) => {
   const l = dash.data('loops');
   ul.replaceChildren();
   if (l.status !== 'ok') return failed(ul, 'service list', l.status);
-  l.data.filter((r) => NOT_LOOP.includes(r.project)).forEach((r) => {
+  const svc = scoped(l.data).filter((r) => NOT_LOOP.includes(r.project));
+  if (!svc.length) ul.append(el('li', 'fx-empty', 'No services or one-off jobs here.'));
+  svc.forEach((r) => {
     const right = el('span', 'r', r.status === 'one-off' ? rel(r.next_due) : LABEL[r.status]);
     ul.append(expandRow('s:' + r.loop, [dot(r.status === 'failing' ? 'bad' : TONE[r.status], LABEL[r.status]), titleCell(r.loop, r.job), right], (more) => {
       more.append(el('p', '', [r.schedule, r.detail].filter(Boolean).join('. ')));
@@ -464,7 +474,7 @@ dash.draw('svc-list', (ul) => {
 });
 dash.draw('svc-count', (e) => {
   const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
-  const s = l.data.filter((r) => NOT_LOOP.includes(r.project)), bad = s.filter((r) => r.status === 'failing').length;
+  const s = scoped(l.data).filter((r) => NOT_LOOP.includes(r.project)), bad = s.filter((r) => r.status === 'failing').length;
   e.textContent = s.length + (bad ? ', ' + bad + ' failing' : '');
 });
 
@@ -473,11 +483,12 @@ dash.draw('wait-list', (box) => {
   const w = dash.data('waiting');
   box.replaceChildren();
   if (w.status !== 'ok') return failed(box, 'waiting list', w.status);
-  if (!w.data.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'Nothing waits on you.')); box.append(d); return; }
+  const mine = scoped(w.data);
+  if (!mine.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'Nothing waits on you.')); box.append(d); return; }
   const groups = [['Due now', (r) => r.due && dayDiff(r.due) <= 0, 'bad'], ['This week', (r) => r.due && dayDiff(r.due) > 0 && dayDiff(r.due) <= 7, 'warn'],
     ['Later', (r) => r.due && dayDiff(r.due) > 7, 'c0'], ['PRs to review', (r) => !r.due && r.tag === 'PR review', 'c1'], ['Open decisions, no date', (r) => !r.due && r.tag !== 'PR review', 'c4']];
   groups.forEach(([name, test, sec]) => {
-    const rows = w.data.filter(test);
+    const rows = mine.filter(test);
     if (!rows.length) return;
     const card = el('section', 'fx-card' + (rows.length > 8 ? ' fx-span' : '')); card.dataset.sec = sec; const head = el('h3', 'fx-group');
     head.append(el('span', '', name), el('span', '', String(rows.length)));

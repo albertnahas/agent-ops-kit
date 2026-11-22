@@ -30,6 +30,6 @@ To give loops a ledger, their runners call `KIT/bin/claude-run` instead of `clau
 
 A private claude.ai dashboard adds Claude Code cloud routines and desktop-app tasks, and opens on any device. It needs the claude.ai Data dashboard type and a desktop app with scheduled tasks; if either isn't there, say so and stop.
 
-1. Create a dashboard from the Data type, titled "Loop fleet". Upload `OPS/fleet/loops.json` and `waiting.json` as assets. In one batch write `dash/meta` (`{"title": "Loop fleet"}`), `dash/look` (`KIT/fleet/dashboard/look.json`), `datasets/loops` and `datasets/waiting` (file sources pointing at the uploads, format json, with `updated`), and `files/index.html` (`{"text": <KIT/fleet/dashboard/index.html>}`). Read `check` in `data/users/me` until it passes.
+1. Create a dashboard from the Data type, titled "Loop fleet". Upload `OPS/fleet/loops.json` and `waiting.json` as assets. In one batch write `dash/meta` (`{"title": "Loop fleet"}`), `dash/look` (`KIT/fleet/dashboard/look.json`), `dash/params` (`KIT/fleet/dashboard/params.json`), `datasets/loops` and `datasets/waiting` (file sources pointing at the uploads, format json, with `updated`), and `files/index.html` (`{"text": <KIT/fleet/dashboard/index.html>}`). Read `check` in `data/users/me` until it passes.
 2. Add `"artifact": "<its url>"` to `OPS/fleet.json`.
 3. On the user's yes, create a desktop scheduled task `fleet-sync` (for example `45 9,21 * * *`) whose prompt says to follow `KIT/fleet/SYNC.md` exactly, and give it a registry row checked by `you`.

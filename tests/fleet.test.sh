@@ -35,6 +35,10 @@ EOF
 } > "$AGENT_OPS_DIR/runs.jsonl"
 echo "{\"at\":\"$(date +%FT%T%z | sed 's/\(..\)$/:\1/')\",\"routines\":[$(for r in good broken flaky fresh; do printf '{"name":"%s","enabled":true,"cron":"0 6 * * *","next_run_at":null,"last_status":null,"last_finished_at":null},' $r; done | sed 's/,$//')],\"tasks\":[]}" > "$AGENT_OPS_DIR/fleet/cloud.json"
 
+echo "{\"launch_agents\": \"$AGENT_OPS_DIR/none\", \"general\": [\"blog\"], \"waiting\": {\"queue\": {\"path\": \"$AGENT_OPS_DIR/QUEUE.md\", \"owner\": \"You\"}}}" > "$AGENT_OPS_DIR/fleet.json"
+printf 'due | kind | item | owner | next action | done when | source\n---\n2026-12-01 | decision | Pick a price | You | decide | priced | agent\n' > "$AGENT_OPS_DIR/QUEUE.md"
+scope() { jq -r --arg l "$1" '.rows[] | select(.loop == $l) | .scope' "$L"; }
+
 expect "builds with a registry and a junky ledger" "python3 fleet/fleet.py >/dev/null"
 expect "a passing check is healthy"            "[ \"\$(status good)\" = healthy ]"
 expect "a failed check is failing"             "[ \"\$(status broken)\" = failing ]"
@@ -43,6 +47,17 @@ expect "never run is not run yet"              "[ \"\$(status fresh)\" = 'no run
 expect "a ledger name with no row is unregistered" "[ \"\$(status stray)\" = unregistered ]"
 expect "checked by is a list"                  "jq -e '.rows[] | select(.loop == \"broken\") | .checked_by == [\"good\", \"heartbeat\"]' $L >/dev/null"
 expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
+expect "a project is its own scope"           "[ \"\$(scope good)\" = Shop ]"
+expect "no project is General"                 "[ \"\$(scope flaky)\" = General ]"
+expect "a project listed as general is General, any case" "[ \"\$(scope fresh)\" = General ] && [ \"\$(jq -r '.rows[] | select(.loop == \"fresh\") | .project' $L)\" = Blog ]"
+expect "an unregistered job is General"        "[ \"\$(scope stray)\" = General ]"
+expect "a queue line waits in General"         "jq -e '.rows | length == 1 and .[0].scope == \"General\" and .[0].project == \"\"' $AGENT_OPS_DIR/fleet/waiting.json >/dev/null"
+of() { python3 -c "import sys; sys.path.insert(0, 'fleet'); from fleet import scoping, C; C['general'] = ['ops']
+print(*scoping([{'Project': p} for p in ('Shop', 'Social algorithms', 'Ops', '')])('$1'), sep='/')"; }
+expect "a repo maps to its project, any case"  "[ \"\$(of SHOP)\" = Shop/Shop ]"
+expect "punctuation doesn't count"             "[ \"\$(of social-algorithms)\" = 'Social algorithms/Social algorithms' ]"
+expect "a repo of a general project is General" "[ \"\$(of ops)\" = Ops/General ]"
+expect "a repo of no project is General"       "[ \"\$(of ops-queue)\" = /General ]"
 expect "the dashboard carries the data"        "grep -q 'report missing' $AGENT_OPS_DIR/fleet/dashboard.html && grep -q 'dash-one-writer' $AGENT_OPS_DIR/fleet/dashboard.html"
 
 # Schedules: the next two fires after 10:00 on Sunday 22 Nov 2026 (or the day given), as crontab reads them.

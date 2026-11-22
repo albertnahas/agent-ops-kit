@@ -35,6 +35,10 @@ Without a ledger, a launchd loop's last exit and the time its log file last chan
 
 `$AGENT_OPS_DIR/fleet.json` (default `~/.agent-ops/fleet.json`; `FLEET_CONFIG` overrides the path). Every key is optional; `fleet.example.json` shows them all. Paths default to the same folder: `REGISTRY.md`, `runs.jsonl`, `checks/`, and `fleet/` for the output.
 
+## Projects and General
+
+The picker at the top of the page narrows every tab to one project: the overview's status line, numbers and lists, the loops and what waits on you. General holds what belongs to no one product: loops with no project, the projects you list under `general` in `fleet.json` (say your ops and personal loops), services, one-off and unregistered jobs, and queue lines. A PR or an open decision belongs to the registry project its repo is named after, ignoring case and punctuation (`social-algorithms` is Social algorithms), and to General otherwise. Each row carries the result as `scope`, so the page never repeats the rule; within General, the Loops tab still shows each project's own card.
+
 ## Keeping it fresh
 
 The build is a service, not a loop: schedule `python3 fleet/fleet.py` every 30 minutes with launchd or cron, and list it under Services in your registry. The claude.ai dashboard (`SYNC.md`) is an optional second view: it adds your cloud routines and desktop tasks, and opens on any device you're signed in on.

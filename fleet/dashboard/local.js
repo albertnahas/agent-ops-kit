@@ -1,8 +1,9 @@
 /* Local stand-in for the claude.ai dashboard runtime, so dashboard/index.html runs unchanged as a plain file.
-   It provides the part of `dash` the page uses (data, calc, draw, setLink, colors) and the design tokens,
-   built from fleet/dashboard/look.json. fleet/fleet.py inlines this, the data (window.FLEET) and the page into dashboard.html. */
+   It provides the part of `dash` the page uses (data, calc, draw, params, setLink, colors) and the design tokens,
+   built from fleet/dashboard/look.json; filters start at fleet/dashboard/params.json. fleet/fleet.py inlines this, the data (window.FLEET) and the page into dashboard.html. */
 (() => {
   const {look} = window.FLEET;
+  let params = {...window.FLEET.params};
   const tokens = (t) => `--color-bg:${t.card};--color-fg:${t.text};--color-fg-muted:${t.muted};--color-border-line:${t.border};
     --color-panel:color-mix(in srgb, ${t.text} 4%, ${t.card});--color-ok:${t.good};--color-warn:${t.warning};--color-bad:${t.bad};
     --cds-chart-grid:color-mix(in srgb, ${t.text} 12%, ${t.card});--fx-ground:${t.ground};`;
@@ -23,6 +24,7 @@
     const d = window.FLEET[id];
     datasets[id] = {status: 'ok', data: d.rows, meta: d.meta, columns: Object.keys(d.rows[0] || {})};
   }
+  const rerun = () => { Object.values(calcs).forEach((c) => delete c.value); Object.keys(draws).forEach((n) => window.dash.draw(n)); };
   const dark = matchMedia('(prefers-color-scheme: dark)');
   window.dash = {
     get colors() { return (dark.matches ? look.dark : look.light).charts; },
@@ -38,6 +40,9 @@
       if (fn) draws[name] = fn;
       document.querySelectorAll(`[data-draw="${name}"]`).forEach((e) => draws[name] && draws[name](e));
     },
+    params() { return {...params}; },
+    setParams(v) { params = {...params, ...v}; rerun(); },
+    resetParams() { params = {...window.FLEET.params}; rerun(); },
     setLink(name) { history.replaceState(null, '', name ? '#' + name : location.pathname); },
   };
   dark.addEventListener('change', () => location.reload());

@@ -29,6 +29,18 @@ def failed(r):
     """A Claude run that failed. A crash still says subtype success; exit and is_error are the truth."""
     return bool(r.get("subtype") != "success" or r.get("exit") or r.get("is_error"))
 
+norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+def scoping(registry):
+    """name -> (the registry project it names, ignoring case and punctuation, or "", its scope). The scope is that
+    project, or General: no project, a project listed under `general` in fleet.json, or nothing a registry row owns."""
+    projects = {norm(r["Project"]): r["Project"] for r in registry if r.get("Project")}
+    general = {norm(g) for g in C.get("general", [])}
+    def of(name):
+        p = projects.get(norm(name), "")
+        return p, p if p and norm(p) not in general else "General"
+    return of
+
 def table(md, heading):
     """Rows of the first markdown table under `## heading`, as dicts keyed by header; [] if there is none."""
     if f"## {heading}" not in md: return []
@@ -277,7 +289,9 @@ def build():
         if loop not in names and l["last"] >= week:
             rows.append({"loop": loop, "project": "Unregistered", "runtime": "?", "job": "", "status": "unregistered",
                          "last_run": l["last"][:16], "schedule": "logs to the ledger with no registry row"})
-    keys = ["loop", "project", "runtime", "job", "schedule", "status", "last_run", "result", "detail",
+    of = scoping(registry)
+    for r in rows: r["scope"] = of(r["project"])[1]
+    keys = ["loop", "project", "scope", "runtime", "job", "schedule", "status", "last_run", "result", "detail",
             "next_due", "pass_rate", "checks", "cost", "history", "checked_by"]
     rows = [{k: r.get(k) for k in keys} for r in rows]
 
@@ -289,7 +303,7 @@ def build():
             {"label": "Registry", "value": str(C["registry"]).replace(str(Path.home()), "~")},
             {"label": "Builder", "value": str(Path(__file__).resolve()).replace(str(Path.home()), "~")},
             {"label": "uid", "value": str(os.getuid())}]
-    items = waiting(now)
+    items = waiting(now, of)
     write("loops", rows, meta)
     write("waiting", items, meta[:1])
     html(rows, items, meta)
@@ -330,7 +344,7 @@ def memo_items(owner, repo, path, cfg):
         text = re.sub(r"^```.*?^```", "", subprocess.run(["git", "-C", str(path), "show", hit], capture_output=True, text=True).stdout,
                       flags=re.M | re.S)  # templates in fenced blocks aren't open decisions
         link = f"https://github.com/{owner}/{repo}/blob/{ref.split('/', 1)[1]}/{file}"
-        src = {"kind": "Memo decision", "tag": "Decision", "source": f"{repo} · {Path(file).stem}", "where": f"{repo}/{file}", "link": link}
+        src = {"kind": "Memo decision", "tag": "Decision", "source": f"{repo} · {Path(file).stem}", "where": f"{repo}/{file}", "link": link, "repo": repo}
         sec = re.search(rf"^#+ {re.escape(heading)}\s*\n(.*?)(?=^#|\Z)", text, re.M | re.S | re.I)
         decisions = re.findall(r"\*\*Decision:\*\*\s*(.*)", text)
         answered = decisions and all(d.strip() and d.strip() != "approve / reject / defer" for d in decisions)
@@ -347,7 +361,7 @@ def memo_items(owner, repo, path, cfg):
                           "action": "mark each row's decision", "due": None})
     return items
 
-def waiting(now):
+def waiting(now, of):
     cfg, items = C["waiting"], []
     q = cfg.get("queue")
     if q and Path(q["path"]).expanduser().exists():
@@ -365,12 +379,14 @@ def waiting(now):
             items.append({"kind": "PR", "tag": "PR review", "source": f"{p['repository']['name']}#{p['number']}",
                           "item": p["title"], "action": "review: merge or close",
                           "where": f"{p['repository']['nameWithOwner']}#{p['number']}", "link": p["url"], "due": None,
+                          "repo": p["repository"]["name"],
                           "since": p["createdAt"][:10]})
         if gh.get("memo_roots"):
             for repo, path in sorted(checkouts(gh["owner"], gh["memo_roots"]).items()):
                 items += memo_items(gh["owner"], repo, path, gh)
     keys = ["title", "tag", "source", "kind", "item", "action", "where", "link", "due", "since"]
-    return sorted(({**{k: i.get(k) for k in keys}, "title": i.get("title") or short(i["item"])} for i in items),
+    return sorted(({**{k: i.get(k) for k in keys}, "title": i.get("title") or short(i["item"]),
+                    **dict(zip(("project", "scope"), of(i.get("repo"))))} for i in items),
                   key=lambda i: (i["due"] or "9999", i["kind"]))
 
 # --- output
@@ -382,7 +398,8 @@ def write(name, rows, meta):
 def html(rows, items, meta):
     """The same page the claude.ai dashboard runs, with a local stand-in for its runtime and the data inlined."""
     data = json.dumps({"loops": {"rows": rows, "meta": meta}, "waiting": {"rows": items, "meta": meta[:1]},
-                       "look": json.loads((ROOT / "dashboard/look.json").read_text())}, ensure_ascii=False).replace("</", "<\\/")
+                       "look": json.loads((ROOT / "dashboard/look.json").read_text()),
+                       "params": json.loads((ROOT / "dashboard/params.json").read_text())}, ensure_ascii=False).replace("</", "<\\/")
     page = (ROOT / "dashboard/index.html").read_text()
     shim = (ROOT / "dashboard/local.js").read_text()
     (C["out"] / "dashboard.html").write_text(
