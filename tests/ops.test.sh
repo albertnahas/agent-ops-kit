@@ -49,11 +49,13 @@ rm -rf "$j"
 k=$(mktemp -d); mkdir "$k/heartbeat.d"
 { echo "{\"loop\":\"crashed-ok\",\"date\":\"$(day 0)\",\"subtype\":\"success\",\"exit\":1}"; echo "{\"loop\":\"x\",\"date\":\"$(day 0)\",\"check\":\"fail\"}"; } > "$k/runs.jsonl"
 printf '#!/usr/bin/env python3\nimport json, sys\nc = json.load(sys.stdin)\na = {k: v for k, v in c["alerts"].items() if not k.startswith("check:")}\na["seen"] = str(len(c["runs"]))\nprint(json.dumps({"alerts": a, "commit": ["EXTRA.md"]}))\n' > "$k/heartbeat.d/10-filter"
+printf '#!/bin/sh\necho '"'"'{"alerts": {}, "commit": "X.md"}'"'"'\n' > "$k/heartbeat.d/21-string"; printf '#!/bin/sh\nprintf "\\377\\376"\n' > "$k/heartbeat.d/22-bytes"; chmod +x "$k/heartbeat.d/21-string" "$k/heartbeat.d/22-bytes"
 printf '#!/bin/sh\necho not json\n' > "$k/heartbeat.d/20-broken"; printf '#!/bin/sh\nexit 3\n' > "$k/heartbeat.d/30-ignored"
 chmod +x "$k/heartbeat.d/10-filter" "$k/heartbeat.d/20-broken"
 o=$(AGENT_OPS_DIR=$k AGENT_OPS_NOTIFY="sh -c 'cat > $k/due.json' n" bin/heartbeat.py | tail -1)
 expect "heartbeat counts a run that says success but exited non-zero as crashed" "jq -e '.alerts | index(\"run:crashed-ok\")' <<<'$o' >/dev/null"
 expect "a heartbeat hook drops and adds alerts" "jq -e '.alerts | (index(\"check:x\") | not) and index(\"seen\")' <<<'$o' >/dev/null"
+expect "a hook naming its commit as a string, or printing bad bytes, is an alert" "jq -e '.alerts | index(\"hook:21-string\") and index(\"hook:22-bytes\")' <<<'$o' >/dev/null"
 expect "a broken hook is an alert and leaves the alerts as they were" "jq -e '.alerts | index(\"hook:20-broken\") and index(\"seen\")' <<<'$o' >/dev/null"
 expect "a hook that isn't executable doesn't run" "! jq -e '.alerts | index(\"hook:30-ignored\")' <<<'$o' >/dev/null"
 expect "the notifier gets the due alerts by key on stdin" "jq -e 'has(\"seen\") and has(\"run:crashed-ok\")' $k/due.json >/dev/null"
@@ -76,7 +78,7 @@ expect "local edits that clash with the remote fail the sync and stay as they we
 mkdir -p "$r/a/inner/.git"; echo '{"loop":"i","date":"2026-11-01T11:00:00","check":"pass"}' > "$r/a/inner/runs.jsonl"; head=$(g2 "$r/a" rev-parse HEAD)
 expect "an empty .git inside never commits the enclosing repo" "AGENT_OPS_DIR=$r/a/inner bin/heartbeat.py >/dev/null && [ \$(g2 $r/a rev-parse HEAD) = $head ]"
 mkdir "$r/c" && git init -q --bare "$r/c/o.git" && git clone -q "$r/c/o.git" "$r/c/w" 2>/dev/null && mkdir "$r/c/w/heartbeat.d"
-printf '#!/bin/sh\necho made > "$AGENT_OPS_DIR/EXTRA.md"; echo "{\\"alerts\\": {}, \\"commit\\": [\\"EXTRA.md\\"]}"\n' > "$r/c/w/heartbeat.d/board"; chmod +x "$r/c/w/heartbeat.d/board"
+printf '#!/bin/sh\necho made > "$AGENT_OPS_DIR/EXTRA.md"; echo "{\\"alerts\\": {}, \\"commit\\": [\\"EXTRA.md\\", \\"GONE.md\\"]}"\n' > "$r/c/w/heartbeat.d/board"; chmod +x "$r/c/w/heartbeat.d/board"
 expect "the sync commits the files a hook names" "AGENT_OPS_DIR=$r/c/w GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t bin/heartbeat.py >/dev/null && [ \"\$(g2 $r/c/w show --name-only --format= HEAD | sort | tr '\\n' ' ')\" = 'COSTS.md EXTRA.md runs.jsonl ' ]"
 rm -rf "$r"
 

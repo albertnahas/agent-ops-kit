@@ -87,11 +87,11 @@ if guard.returncode and not re.search(r"^(drift|unreadable): ", guard.stdout, re
 def hook(path):
     """A hook's alerts and files to commit, or None and why it failed."""
     context = json.dumps({"alerts": alerts, "runs": [{**r, "at": f"{r['at']:%FT%T}"} for r in runs]})
-    try: out = subprocess.run([str(path)], input=context, capture_output=True, text=True, timeout=900, env={**os.environ, "AGENT_OPS_DIR": str(OPS)})
+    try: out = subprocess.run([str(path)], input=context, capture_output=True, text=True, errors="replace", timeout=900, env={**os.environ, "AGENT_OPS_DIR": str(OPS)})
     except (OSError, subprocess.TimeoutExpired) as e: return None, str(e)[:300]
     try:
         res = json.loads(out.stdout); files = res.get("commit", [])
-        if not out.returncode and all(isinstance(k, str) and isinstance(v, str) for k, v in res["alerts"].items()) and all(isinstance(f, str) for f in files):
+        if not out.returncode and all(isinstance(k, str) and isinstance(v, str) for k, v in res["alerts"].items()) and isinstance(files, list) and all(isinstance(f, str) for f in files):
             return (res["alerts"], files), None
     except (ValueError, TypeError, KeyError, AttributeError): pass
     return None, f"exited {out.returncode}: {(out.stderr or out.stdout).strip()[-300:]}"
@@ -140,7 +140,8 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     if "runs.jsonl merge=union" not in (attrs.read_text() if attrs.exists() else ""):
         attrs.parent.mkdir(exist_ok=True)
         with attrs.open("a") as f: f.write("runs.jsonl merge=union\n")
-    git("add", "--", *commit); git("commit", "-qm", f"heartbeat {now:%F}")  # only these: other edits stay local
+    git("add", "--", *[c for c in commit if (OPS / c).exists()])  # a missing path would stage nothing
+    git("commit", "-qm", f"heartbeat {now:%F}")  # only these: other edits stay local
     head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
     clash = not sync.returncode and git("ls-files", "-u").stdout  # the pull went through, but local edits clash with it
     if clash: git("reset", "-q", "--hard", head); git("stash", "pop", "-q")  # so put the tree back as it was
