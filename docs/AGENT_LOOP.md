@@ -81,7 +81,7 @@ A charter or an Orders file changes only through a PR, never by a direct push, h
 
 4. Pull today's data. Rank findings by the KPI table.
 5. New work: at most 2 PRs, each small and focused, each traced to a number in today's data. No refactors for taste. One change at a time per surface.
-6. Write the report and land it as a report-only PR.
+6. Write the report and land it as a report-only PR from the branch `ops/YYYY-MM-DD-report`. The outcome check reads the report only there or on the default branch, and needs something under every section.
 
 ## Report
 
