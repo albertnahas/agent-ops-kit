@@ -8,11 +8,12 @@ Reads $AGENT_OPS_DIR/runs.jsonl (written by claude-run and ops-check) and alerts
 Also runs bin/mission-guard check and alerts when a blessed charter's marked blocks drifted.
 Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY (a command
 called with a subject and a body; unset, it prints them), then logs its own line: pass, or fail
-when the notifier failed. If $AGENT_OPS_DIR is itself a git repo with a remote, it commits and
-pushes (its runs.jsonl merges as a union, so two writers never conflict), so a second watchman in the
-cloud can check that line is fresh (examples/heartbeat-watch-prompt.md); a failed sync logs a
-fail line. A ledger line that isn't a run (no loop name, a date that isn't one or is in the
-future, bytes that aren't UTF-8) is skipped with an alert, never a crash."""
+when the notifier failed. If $AGENT_OPS_DIR is itself a git repo with a remote, it commits
+runs.jsonl and COSTS.md, nothing else, and pushes (runs.jsonl merges as a union, so two writers
+never conflict), so a second watchman in the cloud can check that line is fresh
+(examples/heartbeat-watch-prompt.md); a failed sync logs a fail line and leaves local edits as they were.
+A ledger line that isn't a run (no loop name, a date that isn't one or is in the future, bytes that aren't
+UTF-8) is skipped with an alert, never a crash."""
 import datetime as dt, json, os, re, shlex, subprocess
 from pathlib import Path
 
@@ -22,9 +23,12 @@ now = dt.datetime.now()
 alerts = {}
 
 def when(date):
-    """A ledger date as local time without a zone, so writers with and without offsets compare; None if it isn't one."""
-    try: t = dt.datetime.fromisoformat(date.replace("Z", "+00:00"))
-    except (AttributeError, ValueError): return None
+    """A ledger date as local time without a zone, so writers with and without offsets compare; None if it isn't one.
+    Z, ±HHMM and any fraction are rewritten first: Python 3.9, the macOS system python, reads only ±HH:MM and 3 or 6 digits."""
+    try:
+        date = re.sub(r"Z$|([+-]\d\d):?(\d\d)$", lambda m: f"{m[1]}:{m[2]}" if m[1] else "+00:00", date)
+        t = dt.datetime.fromisoformat(re.sub(r"\.(\d+)", lambda m: "." + m[1][:6].ljust(6, "0"), date))
+    except (TypeError, ValueError): return None
     return t.astimezone().replace(tzinfo=None) if t.tzinfo else t
 
 runs = []
@@ -111,9 +115,12 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     if "runs.jsonl merge=union" not in (attrs.read_text() if attrs.exists() else ""):
         attrs.parent.mkdir(exist_ok=True)
         with attrs.open("a") as f: f.write("runs.jsonl merge=union\n")
-    git("add", "-A", "."); git("commit", "-qm", f"heartbeat {now:%F}")
-    sync = git("pull", "-q", "--rebase")
-    if sync.returncode: git("rebase", "--abort")
+    git("add", "--", LEDGER.name, "COSTS.md"); git("commit", "-qm", f"heartbeat {now:%F}")  # only these: state and outputs stay local
+    head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
+    clash = not sync.returncode and git("ls-files", "-u").stdout  # the pull went through, but local edits clash with it
+    if clash: git("reset", "-q", "--hard", head); git("stash", "pop", "-q")  # so put the tree back as it was
+    elif sync.returncode: git("rebase", "--abort")
     else: sync = git("push", "-q")
-    if sync.returncode: log("fail", "the ops repo didn't sync: " + (sync.stderr.strip().splitlines() or ["?"])[-1][:200])
+    if clash: log("fail", "the ops repo didn't sync: local edits clash with the remote, so they were left as they were")
+    elif sync.returncode: log("fail", "the ops repo didn't sync: " + next((l for l in sync.stderr.splitlines() if l.startswith(("fatal:", "error:"))), sync.stderr.strip()[-200:])[:200])
 print(json.dumps({"alerts": list(alerts), "sent": [] if undelivered else list(due)}))
