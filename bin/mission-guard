@@ -4,10 +4,10 @@ an HTML comment line `mission` to open a block and `/mission` to close it.
 
 mission-guard bless <file>...  record each charter's marked blocks as they are on its repo's default branch
 mission-guard check            alert when a recorded charter's blocks changed on the default branch since its bless
-mission-guard pr               run in a PR checkout: exit 1 if the working tree changes a recorded charter's blocks
+mission-guard pr               run in a PR checkout: exit 1 if it changes any file's mission blocks, 2 if it can't tell
 
 State lives in $AGENT_OPS_DIR/missions.json (default ~/.agent-ops). Push your own edit, then bless it.
-The heartbeat runs check; a PR grader runs pr and grades a hit X, whatever the model thinks."""
+The heartbeat runs check. The loop that grades PRs runs pr on each head (it needs no state, so a copy\nof this file in the product repo works in the cloud) and grades any non-zero exit X, whatever the model thinks."""
 import datetime as dt, difflib, json, os, re, subprocess, sys
 from pathlib import Path
 
@@ -39,19 +39,28 @@ def git(repo, *args):
         return subprocess.CompletedProcess(args, 124, "", "timed out")
 
 
-def default_text(repo, rel):
-    """(text of the file on origin's default branch, None) or (None, why not)."""
+def default_branch(repo):
+    """(origin's default branch, None) after a fetch, or (None, why not)."""
     if git(repo, "fetch", "-q", "origin").returncode:
         return None, "fetch failed"
     branch = re.search(r"ref: refs/heads/(\S+)\s+HEAD", git(repo, "ls-remote", "--symref", "origin", "HEAD").stdout)
-    if not branch:
-        return None, "can't read origin's default branch"
-    shown = git(repo, "show", f"origin/{branch.group(1)}:{rel}")
-    return (shown.stdout, None) if shown.returncode == 0 else (None, f"missing on origin/{branch.group(1)}")
+    return (branch.group(1), None) if branch else (None, "can't read origin's default branch")
+
+
+def default_text(repo, rel):
+    """(text of the file on origin's default branch, None) or (None, why not)."""
+    branch, why = default_branch(repo)
+    if why:
+        return None, why
+    shown = git(repo, "show", f"origin/{branch}:{rel}")
+    return (shown.stdout, None) if shown.returncode == 0 else (None, f"missing on origin/{branch}")
 
 
 def load():
-    return json.loads(STORE.read_text()) if STORE.exists() else {}
+    try:
+        return json.loads(STORE.read_text()) if STORE.exists() else {}
+    except json.JSONDecodeError as e:
+        sys.exit(f"{STORE} is not valid JSON ({e}). Fix it or bless your charters again.")
 
 
 def diff(old, new):
@@ -91,7 +100,10 @@ def check():
         now = why or blocks(text)
         if now == e["blocks"]:
             continue
-        if why:
+        if why and why.startswith("missing on"):
+            drift += 1
+            print(f"drift: {path}: {why}, deleted since the bless on {e['blessed']}")
+        elif why:
             unread += 1
             print(f"unreadable: {path}: {why}")
         elif isinstance(now, str):
@@ -105,17 +117,27 @@ def check():
 
 
 def pr():
-    top = Path(git(".", "rev-parse", "--show-toplevel").stdout.strip() or ".").resolve()
-    url = git(str(top), "remote", "get-url", "origin").stdout
+    """Store-free, so it works wherever the PR is checked out (a cloud grader too). Compares every file
+    with mission markers, in this checkout or on the default branch, against the default branch.
+    Exits 1 if any marked block differs (grade X), 2 if it can't tell (treat as X), 0 if none do."""
+    top = git(".", "rev-parse", "--show-toplevel").stdout.strip()
+    if not top:
+        print("not inside a git checkout: can't tell, treat the PR as X")
+        return 2
+    branch, why = default_branch(top)
+    if why:
+        print(f"{why}: can't tell, treat the PR as X")
+        return 2
+    grep = lambda *ref: git(top, "grep", "-lE", r"^[[:space:]]*<!-- /?mission -->[[:space:]]*$", *ref).stdout.splitlines()
+    files = set(grep()) | {f.split(":", 1)[1] for f in grep(f"origin/{branch}")}
     hits = 0
-    for e in load().values():
-        if Path(e["repo"]).resolve() != top and (not url or git(e["repo"], "remote", "get-url", "origin").stdout != url):
-            continue
-        f = top / e["rel"]
-        if (blocks(f.read_text()) if f.is_file() else "deleted") != e["blocks"]:
+    for rel in sorted(files):
+        f = Path(top) / rel
+        base = git(top, "show", f"origin/{branch}:{rel}")
+        if (blocks(f.read_text()) if f.is_file() else "deleted") != (blocks(base.stdout) if base.returncode == 0 else "new"):
             hits += 1
-            print(f"{e['rel']}: this checkout changes its mission blocks. Grade X.")
-    print(f"{hits} charter(s) with changed mission blocks")
+            print(f"{rel}: this checkout changes its mission blocks. Grade X.")
+    print(f"{hits} of {len(files)} charter(s) with changed mission blocks")
     return 1 if hits else 0
 
 

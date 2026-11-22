@@ -50,7 +50,7 @@ A charter is fixed. It says what the loop is for and what it must never do. What
 
 **The mission guard.** The marked blocks are the one part of a charter no agent should change, so a script with no model in it watches them. After your edit lands on the default branch, run `bin/mission-guard bless <charter>`. From then on:
 - The heartbeat runs `mission-guard check` daily, and alerts with the diff when a blessed charter's blocks differ on the default branch.
-- The loop that grades PRs runs `mission-guard pr` on each PR head before grading, and a hit makes the PR X whatever the grader concluded. That gives grading a floor the model can't talk itself out of. It's the same idea as path-based risk tiers, but it guards the sentences instead of the files.
+- The loop that grades PRs runs `mission-guard pr` on each PR head before grading, and any non-zero exit makes the PR X whatever the grader concluded. It compares the checkout with the default branch and needs no state, so a cloud loop runs a copy kept in the product repo (`scripts/mission-guard`). That gives grading a floor the model can't talk itself out of. It's the same idea as path-based risk tiers, but it guards the sentences instead of the files.
 
 Managers that rewrite their workers' prompts aren't new. Paperclip's org chart has a prompt-evolving plugin, and Gas Town has a Mayor directing workers. What's different here is the split. The part that says what a loop is for is locked, and a script, not a model, enforces it. The part a manager may change goes through the same graded PR as code, with a read date and a reason on every line.
 
