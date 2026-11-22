@@ -28,6 +28,14 @@ check guard block "git push origin +feat"
 check guard allow "git push --force-with-lease origin feat"
 check guard allow "git push origin feature-fix"
 check guard allow "npm test"
+check guard block "cd repo && git push origin main"
+check guard block "git push origin 'main'"
+check guard block $'git push \\\n  origin main'
+check guard block "git status; git push origin HEAD:main"
+check guard allow $'gh pr create --body-file - <<\'EOF\'\nThen git push origin main runs in CI.\nEOF'
+check guard allow 'gh pr create --title "x" --body "never git push origin main by hand"'
+check guard allow 'git commit -m "docs: why we never push to main"'
+check guard allow "git push -u origin fix/main-menu"
 
 check grader allow "gh pr view 12 -R me/app"
 check grader allow "gh pr diff 12 -R me/app --name-only"

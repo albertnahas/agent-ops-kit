@@ -9,9 +9,11 @@ LOOP="${OPS_LOOP:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd
 [ "$1" = "-l" ] && { LOOP="$2"; shift 2; }
 [ "$1" = "--" ] && shift
 [ $# -gt 0 ] || { echo "ops-check: no check command, so nothing to pass" >&2; exit 2; }
+case "${*##*/}" in true|:|"exit"|"exit 0"|"-c true"|"-c :"|"-c exit"|"-c exit 0"|*" -c true"|*" -c :"|*" -c exit"|*" -c exit 0")
+  echo "ops-check: '$*' passes whatever happened, so it checks nothing" >&2; exit 2;; esac
 out=$("$@" 2>&1); code=$?
 [ -s "$OPS/runs.jsonl" ] && [ -n "$(tail -c1 "$OPS/runs.jsonl")" ] && echo >> "$OPS/runs.jsonl"  # never glue onto a cut line
 status=$([ $code -eq 0 ] && echo pass || echo fail)
-jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T)" --arg s "$status" --arg detail "$(printf '%s' "$out" | tail -3 | iconv -c -f UTF-8 -t UTF-8 | cut -c1-300)" \
+jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T%z)" --arg s "$status" --arg detail "$(printf '%s' "$out" | tail -3 | iconv -c -f UTF-8 -t UTF-8 | cut -c1-300)" \
   '{loop:$loop,date:$d,check:$s,detail:$detail}' | tee -a "$OPS/runs.jsonl"
 exit $code

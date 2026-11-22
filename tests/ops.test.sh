@@ -9,7 +9,7 @@ trap 'rm -rf "$AGENT_OPS_DIR"' EXIT
 fail=0
 expect() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 
-bin/ops-check -l good -- true >/dev/null
+bin/ops-check -l good -- test -d . >/dev/null
 bin/ops-check -l broken -- sh -c 'echo report missing; exit 1' >/dev/null
 expect "ops-check passes through the exit code" "! bin/ops-check -l broken -- false >/dev/null"
 expect "ops-check logs pass and fail" "[ \$(grep -c '\"check\":\"pass\"' $AGENT_OPS_DIR/runs.jsonl) = 1 ] && grep -q 'report missing' $AGENT_OPS_DIR/runs.jsonl"
@@ -182,5 +182,26 @@ reset; echo more >> "$h/w/docs/rules/code.md"; hc commit -qam i
 expect "mission-guard pr ignores an @path inside code" "[ \$(guard pr) = 0 ]"
 expect "the Orders template locks its Supervisor line in a mission block" "grep -A1 '^<!-- mission -->' examples/orders.md | grep -q '^Supervisor:'"
 rm -rf "$a" "$h"
+
+# The runner owns the check line, checks can't be trivially true, dates carry offsets, reports land on their branch
+expect "ops-check refuses a check that is always true" "! bin/ops-check -l triv -- true 2>/dev/null && ! bin/ops-check -l triv -- /bin/sh -c 'exit 0' 2>/dev/null && ! grep -q '\"loop\":\"triv\"' $AGENT_OPS_DIR/runs.jsonl"
+expect "ops-check and claude-run write dates with an offset" "grep '\"loop\":\"good\"' $AGENT_OPS_DIR/runs.jsonl | grep -qE '\"date\":\"[^\"]*[+-][0-9]{4}\"' && grep '\"loop\":\"crashed\"' $AGENT_OPS_DIR/runs.jsonl | grep -qE '[+-][0-9]{4}\"'"
+k=$(mktemp -d); git init -q --bare -b main "$k/o.git"; mkdir "$k/w"; cp -R bin checks scripts docs "$k/w/"
+kc() { git -C "$k/w" -c user.name=t -c user.email=t@t "$@"; }
+kc init -q -b main; kc remote add origin "$k/o.git"; kc add -A; kc commit -qm kit; kc push -q origin main
+day=2026-11-25; mkdir -p "$k/w/docs/ops-reports"
+printf '## TLDR\n## KPIs\n## Findings\n## Actions taken\n## Escalations\n## Handoff\n' > "$k/w/docs/ops-reports/$day.md"
+kc checkout -q -b scratch/x; kc add -A; kc commit -qm r; kc push -q origin scratch/x
+expect "report-landed ignores a report on a branch that isn't the report's" "! (cd $k/w && $PWD/checks/report-landed.sh $day >/dev/null)"
+kc checkout -q -b ops/$day-report; kc push -q origin ops/$day-report
+expect "report-landed refuses a report with empty sections" "(cd $k/w && $PWD/checks/report-landed.sh $day; true) | grep -q 'tldr (empty)'"
+printf '## TLDR\n- ok\n## KPIs\n| a | 1 |\n## Findings\n1. none\n## Actions taken\nnone\n## Escalations\n- none\n## Handoff\n- x\n' > "$k/w/docs/ops-reports/$day.md"; kc commit -qam r; kc push -q origin ops/$day-report
+expect "report-landed passes a filled report on ops/<date>-report" "(cd $k/w && $PWD/checks/report-landed.sh $day >/dev/null)"
+kc checkout -q main; mkdir "$k/bin"
+printf '#!/bin/sh\necho "$@" > "%s/args"\nprintf "#!/bin/sh\\nexit 0\\n" > checks/report-landed.sh; printf "#!/bin/sh\\nexit 0\\n" > bin/ops-check; echo exit > scripts/run.sh\necho "{\\"subtype\\":\\"success\\",\\"result\\":\\"done\\"}"\n' "$k" > "$k/bin/claude"; chmod +x "$k/bin/claude"
+PATH="$k/bin:$PATH" OPS_LOOP=runner "$k/w/scripts/run.sh"
+expect "run.sh runs the session in a sandbox that can't write the ledger" "grep -q '\"allowUnsandboxedCommands\":false' $k/args && grep -q '\"denyWrite\":\[\"$(cd $AGENT_OPS_DIR && pwd -P)\"\]' $k/args"
+expect "run.sh judges the run with the default branch's check, not the session's edit" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"runner\",.*\"check\":\"fail\"'"
+rm -rf "$k"
 
 exit $fail
