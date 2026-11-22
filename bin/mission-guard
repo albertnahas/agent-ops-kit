@@ -179,8 +179,11 @@ def author(n):
     """Model-free gate run before any grading: PR n's author must have write, maintain or admin access to this
     repo. A stranger's PR, a bot's included, is X before a model reads it or its code runs."""
     gh = lambda *a: subprocess.run(["gh", *a], capture_output=True, text=True, env=ENV, timeout=60)
-    login = gh("pr", "view", n, "--json", "author", "-q", ".author.login").stdout.strip()
-    perm = gh("api", f"repos/{{owner}}/{{repo}}/collaborators/{login}/permission", "-q", ".permission").stdout.strip() if login else ""
+    try:
+        login = gh("pr", "view", n, "--json", "author", "-q", ".author.login").stdout.strip()
+        perm = gh("api", f"repos/{{owner}}/{{repo}}/collaborators/{login}/permission", "-q", ".permission").stdout.strip() if login else ""
+    except subprocess.TimeoutExpired:
+        perm = ""
     if not perm:
         print(f"#{n}: can't read its author's access, treat the PR as X")
         return 2
