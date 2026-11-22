@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 """Scaffold one scheduled loop, the same way every time. No model, no side effects outside files.
 
-new-loop --repo PATH --name NAME --mission TEXT --limits TEXT --outcome TEXT --floor TEXT --source TEXT
-         [--measure CMD] [--x-surface TEXT]... --schedule CRON --runtime launchd|cron|cloud
-         [--project P] [--checked-by WHO] [--supervisor LOOP] [--escalates-to WHO] [--role master|manager]
-         [--budget USD] [--turns N]
+Its flags are the `new` questions in skills/new-loop/questions.json, the spec the skill and the dashboard
+form read too. docs/RUNTIMES.md says which --runtime fits.
 
 Writes, refusing to overwrite any of them:
   REPO/docs/loops/NAME.md         the charter, from the kit's docs/AGENT_LOOP.md, with its Good block filled
   REPO/docs/orders/NAME.md        its Orders, from examples/orders.md, with the Target at the Floor
   $AGENT_OPS_DIR/checks/NAME.py   the outcome check, from templates/new-loop/check.py
   $AGENT_OPS_DIR/runners/NAME.sh  the runner (launchd and cron), exporting OPS_LOOP with cost caps
-  $AGENT_OPS_DIR/schedules/...    a launchd plist, a crontab line or a cloud routine prompt, not installed
+  $AGENT_OPS_DIR/schedules/...    a launchd plist, a crontab line, or a routine or app task prompt, not installed
   $AGENT_OPS_DIR/REGISTRY.md      one new row
 and copies into REPO whatever the charter relies on that it lacks: the grader, the hooks, claude-run,
 ops-check, scripts/mission-guard and docs/DECISIONS.md. Text for mission blocks is the user's, verbatim.
-It commits, pushes, blesses and schedules nothing: it prints those steps."""
+It commits, pushes, blesses and schedules nothing: it prints those steps.
+
+new-loop --reschedule --repo PATH --name NAME --runtime R --schedule CRON moves an existing loop: it rewrites
+its runner, schedule file and registry row, and, when the runtime changes, the charter's kill switch line,
+which is a mission block, so that one lands as a founder PR. It prints how to stop the old schedule."""
 import argparse, datetime as dt, json, os, plistlib, re, shlex, shutil, sys
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 TEMPLATES = KIT / "templates/new-loop"
+SPEC = json.loads((KIT / "skills/new-loop/questions.json").read_text())
 OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops")).expanduser()
 INSTALL = {".claude/settings.json": ".claude/settings.json", "bin/claude-run": "bin/claude-run",
            "bin/ops-check": "bin/ops-check", "bin/mission-guard": "scripts/mission-guard",
@@ -36,26 +39,27 @@ GOOD = ("## Good\n\n<!-- mission -->\n- **Outcome:**\n- **Floor:**\n- **Source:*
 
 def args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for a in ("repo", "name", "mission", "limits", "outcome", "floor", "source", "schedule"):
-        p.add_argument(f"--{a}", required=True)
-    p.add_argument("--runtime", required=True, choices=("launchd", "cron", "cloud"))
-    p.add_argument("--measure", default="")
-    p.add_argument("--x-surface", action="append", default=[])
-    p.add_argument("--project", default="")
-    p.add_argument("--checked-by", help="who reads its output: default its supervisor, else you")
-    p.add_argument("--supervisor", default="")
-    p.add_argument("--escalates-to", default="")
-    p.add_argument("--role", default="", choices=("", "master", "manager"))
-    p.add_argument("--budget", type=float, default=5)
-    p.add_argument("--turns", type=int, default=60)
+    p.add_argument("--reschedule", action="store_true", help="move an existing loop to a new schedule or runtime")
+    for q in SPEC["new"]:
+        p.add_argument(f"--{q['id']}", help=q["help"], type={"number": float, "integer": int}.get(q["kind"], str),
+                       choices=[c["value"] for c in q.get("choices", [])] or None, action="append" if q.get("repeat") else "store",
+                       default=[] if q.get("repeat") else None if "default" in q else "")
     a = p.parse_args()
+    caps = old_caps(a.name) if a.reschedule and a.name else {}
+    for q in SPEC["new"]:  # a reschedule keeps the runner's caps unless given new ones
+        if "default" in q and getattr(a, q["id"]) is None:
+            setattr(a, q["id"], caps.get(q["id"], q["default"]))
+    need = ("repo", "name", "runtime", "schedule") if a.reschedule else [q["id"] for q in SPEC["new"] if q["required"]]
+    missing = [f"--{n}" for n in need if not getattr(a, n.replace("-", "_"))]
+    if missing:
+        p.error("missing " + ", ".join(missing))
     a.repo = Path(a.repo).expanduser().resolve()
     a.checked_by = a.checked_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
         p.error("--name is letters, digits, _ . and -, and not you or nobody")
-    if re.match(LEVEL, a.floor, re.I) and not a.measure:
+    if not a.reschedule and re.match(LEVEL, a.floor, re.I) and not a.measure:
         p.error("a measured --floor needs --measure, the command that reads it from --source")
-    if not re.match(LEVEL, a.floor, re.I) and not a.floor.startswith("unmeasured: "):
+    if not a.reschedule and not re.match(LEVEL, a.floor, re.I) and not a.floor.startswith("unmeasured: "):
         p.error("--floor starts with 'at least <number>', 'at most <number>' or 'unmeasured: '")
     if not (a.repo / ".git").exists():
         p.error(f"{a.repo} is not a git checkout")
@@ -63,6 +67,14 @@ def args():
     if len(a.cron) != 5:
         p.error("--schedule is a 5-field cron line, like '0 2 * * *'")
     return a
+
+
+def old_caps(name):
+    """The budget and turns in a loop's current runner, if it has one."""
+    runner = OPS / f"runners/{name}.sh"
+    text = runner.read_text() if runner.exists() else ""
+    found = {k: re.search(rf"--{flag} (\S+)", text) for k, flag in (("budget", "max-budget-usd"), ("turns", "max-turns"))}
+    return {k: (float if k == "budget" else int)(m.group(1)) for k, m in found.items() if m}
 
 
 def calendar(cron):
@@ -77,16 +89,13 @@ def fill(template, a, charter):
     """The kit's charter with this loop's words in it, or exit naming a placeholder it doesn't know. The words go in
     as numbered tokens first, so the scan sees only the template, never a < or > the user typed."""
     text = template if "\n## Good\n" in template else template.replace("## Kill switch", GOOD + "## Kill switch", 1)
-    stop = {"launchd": f"`launchctl bootout gui/$(id -u)/{label(a)}`",
-            "cron": f"`crontab -l | grep -v 'runners/{a.name}.sh' | crontab -`",
-            "cloud": f"disable the routine `{a.name}` at claude.ai/code/routines"}[a.runtime]
     check = f"$AGENT_OPS_DIR/checks/{a.name}.py"
     surfaces, values = "".join(f"- {s}\n" for s in a.x_surface), []
     for pattern, value in [
             (r"^# <Project>", f"# {a.name}"),
             (r"docs/orders/<name>\.md", f"docs/orders/{a.name}.md"),
             (r"(?<=^## Mission\n\n<!-- mission -->\n)<.*>$", a.mission),
-            (r"(?<=\*\*Hard stop:\*\* ).*$", stop + "."),
+            (HARD_STOP, RUNTIMES[a.runtime]["stop"].format(name=a.name) + "."),
             (r"(?<=^## Hard limits\n\n<!-- mission -->\n)<.*>$", a.limits),
             (r"^- \*\*Outcome:\*\*.*$", f"- **Outcome:** {a.outcome}"),
             (r"^- \*\*Floor:\*\*.*$", f"- **Floor:** {a.floor}"),
@@ -118,68 +127,90 @@ def orders(template, a):
     return text.split("date | why | by")[0] + f"date | why | by\n{dt.date.today()} | first Orders, from new-loop | you\n"
 
 
+RUNTIMES = {  # registry Runtime and Job, and the kill switch's hard stop, for each --runtime
+    "launchd": {"runtime": "mac", "job": "com.agent-ops.{name}", "stop": "`launchctl bootout gui/$(id -u)/com.agent-ops.{name}; rm ~/Library/LaunchAgents/com.agent-ops.{name}.plist`"},
+    "cron": {"runtime": "cron", "job": "cron:{name}.sh", "stop": "`crontab -l | grep -v 'runners/{name}.sh' | crontab -`"},
+    "cloud": {"runtime": "cloud", "job": "routine:{name}", "stop": "disable the routine `{name}` at claude.ai/code/routines"},
+    "app": {"runtime": "app", "job": "task:{name}", "stop": "disable the scheduled task `{name}` in the Claude desktop app"}}
+HARD_STOP = r"(?<=\*\*Hard stop:\*\* ).*$"
+
+
 def label(a):
-    return f"com.agent-ops.{a.name}"
+    return RUNTIMES["launchd"]["job"].format(name=a.name)
 
 
 def registry_row(a, charter):
-    job = {"launchd": label(a), "cron": f"cron:{a.name}.sh", "cloud": f"routine:{a.name}"}[a.runtime]
-    runtime = {"launchd": "mac", "cron": "cron", "cloud": "cloud"}[a.runtime]
     check = f"report and Floor (`checks/{a.name}.py`)"
-    cells = [a.name, a.project, runtime, job, a.schedule, f"`{charter}`", check, a.checked_by,
-             a.supervisor, a.escalates_to, a.role]
+    cells = [a.name, a.project, RUNTIMES[a.runtime]["runtime"], RUNTIMES[a.runtime]["job"].format(name=a.name), a.schedule,
+             f"`{charter}`", check, a.checked_by, a.supervisor, a.escalates_to, a.role]
     return "| " + " | ".join(map(cell, cells)) + " |"
 
 
-def register(row, name):
+def registry(name):
+    """The registry's path, text, Registry table match and the loop's row match (or None)."""
     path = OPS / "REGISTRY.md"
     text = path.read_text() if path.exists() else (TEMPLATES / "REGISTRY.md").read_text()
     head = re.search(r"^## Registry\n(?:.*\n)*?\|---.*\n(?:\|.*\n)*", text, re.M)
     if not head:
         sys.exit(f"{path} has no Registry table")
-    if re.search(rf"^\| *{re.escape(name)} *\|", head.group(0), re.M | re.I):
-        sys.exit(f"{path} already has a row for {name}")
-    path.write_text(text[:head.end()] + row + "\n" + text[head.end():])
-    return path
+    row = re.search(rf"^\| *{re.escape(name)} *\|.*$", head.group(0), re.M | re.I)
+    return path, text, head, row
 
 
-def main():
-    a = args()
-    charter = a.repo / f"docs/loops/{a.name}.md"
-    files = {charter: fill((KIT / "docs/AGENT_LOOP.md").read_text(), a, charter.relative_to(a.repo)),
-             a.repo / f"docs/orders/{a.name}.md": orders((KIT / "examples/orders.md").read_text(), a)}
-    check, runner = OPS / f"checks/{a.name}.py", OPS / f"runners/{a.name}.sh"
-    py, sh = json.dumps, lambda v: shlex.quote(str(v))
-    files[check] = (TEMPLATES / "check.py").read_text()
-    for k, v in {"name": a.name, "repo": py(str(a.repo)), "report": py(f"docs/ops-reports/{a.name}/{{day}}.md"),
-                 "floor": py(a.floor), "measure": py(a.measure)}.items():
-        files[check] = files[check].replace("{{%s}}" % k, v)
-    if a.runtime == "cloud":
+def register(a, charter):
+    """Adds the loop's registry row, or with --reschedule updates its Runtime, Job and Schedule."""
+    path, text, head, row = registry(a.name)
+    if not a.reschedule:
+        if row:
+            sys.exit(f"{path} already has a row for {a.name}")
+        path.write_text(text[:head.end()] + registry_row(a, charter) + "\n" + text[head.end():])
+        return
+    cells = re.split(r"(?<!\\)\|", row.group(0).strip("|"))
+    new = RUNTIMES[a.runtime]
+    cells[2:5] = [f" {new['runtime']} ", f" {new['job'].format(name=a.name)} ", f" {a.schedule} "]
+    at = head.start() + row.start()
+    path.write_text(text[:at] + "|" + "|".join(cells) + "|" + text[at + len(row.group(0)):])
+
+
+def old_runtime(name):
+    """The runtime a registered loop runs on now, read from its registry Job, or exit."""
+    path, _, _, row = registry(name)
+    job = row and re.split(r"(?<!\\)\|", row.group(0).strip("|"))[3].strip()
+    old = next((r for r, v in RUNTIMES.items() if v["job"].format(name=name) == job), None)
+    if not old:
+        sys.exit(f"{path} has no row for {name} with a Job new-loop wrote" if row else f"{path} has no row for {name}")
+    return old
+
+
+def schedule(a, charter, check):
+    """The runner and schedule file for --runtime, and the command that installs them."""
+    files, sh = {}, lambda v: shlex.quote(str(v))
+    runner = OPS / f"runners/{a.name}.sh"
+    if a.runtime in ("cloud", "app"):
         prompt = (KIT / "examples/cloud-task-prompt.md").read_text().split("---", 1)[1].strip()
-        files[OPS / f"schedules/{a.name}.routine.md"] = prompt.replace("docs/AGENT_LOOP.md", str(charter.relative_to(a.repo))) + "\n"
-        schedule = (f"make a Claude Code routine named {a.name} on {a.schedule} with the prompt in {OPS}/schedules/{a.name}.routine.md (/schedule), "
-                    f"and run `ops-check -l {a.name} -- python3 {sh(check)}` each day after it, from the crontab that runs your heartbeat")
-    else:
-        files[runner] = (TEMPLATES / "run.sh").read_text()
-        for k, v in {"name": a.name, "repo": sh(a.repo), "charter": sh(charter.relative_to(a.repo)), "check": sh(check),
-                     "log": sh(OPS / f"logs/{a.name}.log"), "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
-            files[runner] = files[runner].replace("{{%s}}" % k, v)
-        path = ":".join(dict.fromkeys([str(Path(w).parent) for t in ("claude", "gh", "jq", "python3", "git")
-                                       for w in [shutil.which(t)] if w] + ["/usr/bin", "/bin"]))  # cron and launchd start bare
-        if a.runtime == "launchd":
-            plist = OPS / f"schedules/{label(a)}.plist"
-            files[plist] = plistlib.dumps({"Label": label(a), "ProgramArguments": [str(runner)],
-                                           "StartCalendarInterval": calendar(a.cron),
-                                           "EnvironmentVariables": {"PATH": path, "AGENT_OPS_DIR": str(OPS)}}).decode()
-            agents = Path.home() / "Library/LaunchAgents"
-            schedule = f"cp {sh(plist)} {sh(agents)}/ && launchctl bootstrap gui/$(id -u) {sh(agents / plist.name)}"
-        else:
-            line = OPS / f"schedules/{a.name}.cron"
-            files[line] = f"{a.schedule} PATH={sh(path)} AGENT_OPS_DIR={sh(OPS)} {sh(runner)}\n"
-            schedule = f"(crontab -l 2>/dev/null; cat {sh(line)}) | crontab -"
-    taken = [str(f) for f in files if f.exists()]
-    if taken:
-        sys.exit("new-loop won't overwrite: " + ", ".join(taken))
+        what = {"cloud": ("routine", "a Claude Code routine (/schedule)"), "app": ("task", "a Claude desktop app scheduled task")}[a.runtime]
+        files[OPS / f"schedules/{a.name}.{what[0]}.md"] = prompt.replace("docs/AGENT_LOOP.md", str(charter)) + "\n"
+        return files, (f"make {what[1]} named {a.name} on {a.schedule} with the prompt in {OPS}/schedules/{a.name}.{what[0]}.md, "
+                       f"and run `ops-check -l {a.name} -- python3 {sh(check)}` each day after it, from the crontab that runs your heartbeat")
+    files[runner] = (TEMPLATES / "run.sh").read_text()
+    for k, v in {"name": a.name, "repo": sh(a.repo), "charter": sh(charter), "check": sh(check),
+                 "log": sh(OPS / f"logs/{a.name}.log"), "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
+        files[runner] = files[runner].replace("{{%s}}" % k, v)
+    path = ":".join(dict.fromkeys([str(Path(w).parent) for t in ("claude", "gh", "jq", "python3", "git")
+                                   for w in [shutil.which(t)] if w] + ["/usr/bin", "/bin"]))  # cron and launchd start bare
+    if a.runtime == "launchd":
+        plist = OPS / f"schedules/{label(a)}.plist"
+        files[plist] = plistlib.dumps({"Label": label(a), "ProgramArguments": [str(runner)],
+                                       "StartCalendarInterval": calendar(a.cron),
+                                       "EnvironmentVariables": {"PATH": path, "AGENT_OPS_DIR": str(OPS)}}).decode()
+        agents = Path.home() / "Library/LaunchAgents"
+        return files, f"cp {sh(plist)} {sh(agents)}/ && launchctl bootstrap gui/$(id -u) {sh(agents / plist.name)}"
+    line = OPS / f"schedules/{a.name}.cron"
+    files[line] = f"{a.schedule} PATH={sh(path)} AGENT_OPS_DIR={sh(OPS)} {sh(runner)}\n"
+    return files, f"(crontab -l 2>/dev/null; cat {sh(line)}) | crontab -"
+
+
+def write(files):
     left = [f for f, t in files.items() if "{{" in t]
     if left:
         sys.exit(f"unfilled template field in {left[0]}")
@@ -188,24 +219,67 @@ def main():
         f.write_text(text)
         if f.suffix in (".py", ".sh"):
             f.chmod(0o755)
+
+
+def reschedule(a, charter):
+    path = a.repo / charter
+    if not path.exists():
+        sys.exit(f"no charter at {path}")
+    old = old_runtime(a.name)
+    files, install = schedule(a, charter, OPS / f"checks/{a.name}.py")
+    register(a, charter)
+    write(files)
+    for f in [OPS / f"runners/{a.name}.sh", *(OPS / f"schedules/{n}" for n in (
+            f"{label(a)}.plist", f"{a.name}.cron", f"{a.name}.routine.md", f"{a.name}.task.md"))]:
+        if f not in files and f.exists():
+            f.unlink()
+    steps = [f"Stop the old schedule: {RUNTIMES[old]['stop'].format(name=a.name).strip('`')}", f"Install the new one: {install}"]
+    if old != a.runtime:
+        text = path.read_text()
+        path.write_text(re.sub(HARD_STOP, lambda m: RUNTIMES[a.runtime]["stop"].format(name=a.name) + ".", text, count=1, flags=re.M))
+        steps.insert(0, f"Land {charter}'s new kill switch as a founder PR (it's a mission block), then bless it again")
+    print("\n".join([f"wrote {f}" for f in files] + [f"updated {a.name} in {OPS / 'REGISTRY.md'}", "", "Next:"] +
+                    [f"{i}. {t}" for i, t in enumerate(steps, 1)]))
+
+
+def main():
+    a = args()
+    charter = Path(f"docs/loops/{a.name}.md")
+    if a.reschedule:
+        return reschedule(a, charter)
+    files = {a.repo / charter: fill((KIT / "docs/AGENT_LOOP.md").read_text(), a, charter),
+             a.repo / f"docs/orders/{a.name}.md": orders((KIT / "examples/orders.md").read_text(), a)}
+    check = OPS / f"checks/{a.name}.py"
+    py, sh = json.dumps, lambda v: shlex.quote(str(v))
+    files[check] = (TEMPLATES / "check.py").read_text()
+    for k, v in {"name": a.name, "repo": py(str(a.repo)), "report": py(f"docs/ops-reports/{a.name}/{{day}}.md"),
+                 "floor": py(a.floor), "measure": py(a.measure)}.items():
+        files[check] = files[check].replace("{{%s}}" % k, v)
+    more, install = schedule(a, charter, check)
+    files.update(more)
+    taken = [str(f) for f in files if f.exists()]
+    if taken:
+        sys.exit("new-loop won't overwrite: " + ", ".join(taken))
+    write(files)
     copied = []
     for src, dst in INSTALL.items():
         if not (a.repo / dst).exists():
             (a.repo / dst).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(KIT / src, a.repo / dst)
             copied.append(dst)
-    reg = register(registry_row(a, charter.relative_to(a.repo)), a.name)
+    register(a, charter)
     mine = [str(f.relative_to(a.repo)) for f in files if a.repo in f.parents]
     guarded = [f for f in mine if "<!-- mission -->" in files[a.repo / f]]
+    runner = OPS / f"runners/{a.name}.sh"
     kept = [] if "guard-bash.sh" in (a.repo / ".claude/settings.json").read_text() else [
         f"kept {a.repo}/.claude/settings.json: merge the kit's PreToolUse guard hook and deny rules into it by hand, or the guard isn't wired"]
-    print("\n".join([f"wrote {f}" for f in files] + [f"copied {d} into {a.repo}" for d in copied] + kept + [f"added {a.name} to {reg}", "",
-          "Next:",
+    print("\n".join([f"wrote {f}" for f in files] + [f"copied {d} into {a.repo}" for d in copied] + kept +
+          [f"added {a.name} to {OPS / 'REGISTRY.md'}", "", "Next:",
           f"1. Dry run the check: python3 {sh(check)}",
           f"2. Land the repo files on the default branch through a PR: {', '.join(mine + copied)}",
           f"3. Bless at your own terminal: cd {sh(a.repo)} && scripts/mission-guard bless {' '.join(guarded)}",
-          f"4. Run it once by hand: {sh(runner)}" if a.runtime != "cloud" else "4. Run the routine once by hand from claude.ai/code/routines",
-          f"5. Schedule it: {schedule}"]))
+          f"4. Run it once by hand: {sh(runner)}" if runner in files else "4. Run it once by hand with the app's or the routine's Run now",
+          f"5. Schedule it: {install}"]))
 
 
 main()

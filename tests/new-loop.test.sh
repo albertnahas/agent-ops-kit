@@ -61,7 +61,7 @@ expect "ops-check passes the loop's own check once its report is on a branch" "O
 "$AGENT_OPS_DIR/runners/triage.sh"
 expect "the runner logs Claude's run and the check under the loop's name" "grep -q '\"loop\":\"triage\".*\"subtype\":\"success\".*\"cost\":0.42' $AGENT_OPS_DIR/runs.jsonl && tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"triage\",.*\"check\":\"pass\"'"
 
-out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --checked-by triage --outcome "merged PRs | week" --project "A|B" 2>&1)
+out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --checked-by triage --budget 2.5 --turns 20 --outcome "merged PRs | week" --project "A|B" 2>&1)
 expect "new-loop scaffolds a cron loop next to the first" "[ \$? = 0 ] && grep -q '^30 6 \* \* 1-5 PATH=.* AGENT_OPS_DIR=.*runners/growth.sh' $AGENT_OPS_DIR/schedules/growth.cron"
 expect "a | in an answer is escaped in the KPI table and the registry" "grep -qF '| merged PRs \\| week | at least 1000 commits |' docs/loops/growth.md && grep -qF '| growth | A\\|B | cron |' $AGENT_OPS_DIR/REGISTRY.md"
 report growth && land growth
@@ -71,6 +71,17 @@ expect "new-loop writes a cloud routine prompt that points at the charter" "[ \$
 expect "a supervised loop is checked by its supervisor" "grep -q '^| weekly |  | cloud | routine:weekly | .* | triage | triage |  |  |\$' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^Supervisor: triage, Mondays' docs/orders/weekly.md"
 expect "launchd refuses a schedule it can't express" "! scaffold --name ranged --runtime launchd --schedule '0 9 * * 1-5' --floor 'unmeasured: x' >/dev/null 2>&1"
 expect "the registry holds all three loops" "[ \$(grep -cE '^\| (triage|growth|weekly) \|' $AGENT_OPS_DIR/REGISTRY.md) = 3 ]"
+out=$(scaffold --name desk --runtime app --floor "unmeasured: x" 2>&1)
+expect "new-loop writes a desktop app task the registry and kill switch name" "[ \$? = 0 ] && [ -f $AGENT_OPS_DIR/schedules/desk.task.md ] && grep -q '^| desk |  | app | task:desk |' $AGENT_OPS_DIR/REGISTRY.md && grep -q 'disable the scheduled task \`desk\`' docs/loops/desk.md"
+touch $AGENT_OPS_DIR/schedules/app-triage.cron $AGENT_OPS_DIR/schedules/nope.cron
+out=$("$kit/bin/new-loop" --reschedule --repo "$s/app" --name triage --runtime cron --schedule "15 3 * * *" 2>&1)
+expect "--reschedule moves a loop from launchd to cron" "[ \$? = 0 ] && grep -q '^| triage | App | cron | cron:triage.sh | 15 3 \* \* \* |' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^15 3 ' $AGENT_OPS_DIR/schedules/triage.cron && [ ! -e $AGENT_OPS_DIR/schedules/com.agent-ops.triage.plist ] && [ -x $AGENT_OPS_DIR/runners/triage.sh ]"
+expect "--reschedule rewrites the kill switch and says it's a founder PR" "grep -q \"Hard stop:\*\* \\\`crontab -l | grep -v 'runners/triage.sh'\" $c && grep -q 'founder PR' <<<\"\$out\" && grep -q 'Stop the old schedule: launchctl bootout gui/\$(id -u)/com.agent-ops.triage; rm ~/Library/LaunchAgents/com.agent-ops.triage.plist' <<<\"\$out\""
+expect "--reschedule refuses a loop it doesn't know, before touching its files" "! $kit/bin/new-loop --reschedule --repo $s/app --name nope --runtime cron --schedule '0 1 * * *' >/dev/null 2>&1 && [ -e $AGENT_OPS_DIR/schedules/nope.cron ]"
+expect "--reschedule leaves other loops' files alone" "[ -e $AGENT_OPS_DIR/schedules/app-triage.cron ]"
+"$kit/bin/new-loop" --reschedule --repo "$s/app" --name growth --runtime launchd --schedule "0 7 * * *" >/dev/null
+expect "--reschedule keeps the runner's own caps, decimals included" "grep -q 'max-budget-usd 2.5' $AGENT_OPS_DIR/runners/growth.sh && grep -q 'max-turns 20' $AGENT_OPS_DIR/runners/growth.sh && [ ! -e $AGENT_OPS_DIR/schedules/growth.cron ]"
+expect "every question in the spec is a new-loop flag" "h=\$($kit/bin/new-loop --help); ! jq -r '.new[].id' $kit/skills/new-loop/questions.json | while read q; do grep -q -- \"--\$q \" <<<\"\$h\" || echo \$q; done | grep -q ."
 expect "nothing was installed with launchctl or crontab" "[ ! -e $s/scheduled ]"
 
 if [ -f "$factory/fleet/fleet.py" ]; then
