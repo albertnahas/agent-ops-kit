@@ -69,6 +69,8 @@ expect "a check fails when the Floor's number isn't met" "! python3 $AGENT_OPS_D
 out=$(scaffold --name weekly --runtime cloud --schedule "0 9 * * 1" --floor "unmeasured: no issue data yet" --supervisor triage 2>&1)
 expect "new-loop writes a cloud routine prompt that points at the charter" "[ \$? = 0 ] && grep -q 'Read docs/loops/weekly.md and run it' $AGENT_OPS_DIR/schedules/weekly.routine.md && [ ! -e $AGENT_OPS_DIR/runners/weekly.sh ]"
 expect "a supervised loop is checked by its supervisor" "grep -q '^| weekly |  | cloud | routine:weekly | .* | triage | triage |  |  |\$' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^Supervisor: triage, Mondays' docs/orders/weekly.md"
+out=$(AGENT_OPS_REGISTRY=$s/elsewhere/fleet-registry.md scaffold --name movable --runtime cloud --schedule "0 9 * * 2" --floor "unmeasured: x" 2>&1)
+expect "AGENT_OPS_REGISTRY moves the registry row out of AGENT_OPS_DIR" "[ \$? = 0 ] && grep -q '^| movable |' $s/elsewhere/fleet-registry.md && ! grep -q '^| movable |' $AGENT_OPS_DIR/REGISTRY.md && grep -q 'fleet-registry.md' <<<\"\$out\""
 expect "launchd refuses a schedule it can't express" "! scaffold --name ranged --runtime launchd --schedule '0 9 * * 1-5' --floor 'unmeasured: x' >/dev/null 2>&1"
 expect "the registry holds all three loops" "[ \$(grep -cE '^\| (triage|growth|weekly) \|' $AGENT_OPS_DIR/REGISTRY.md) = 3 ]"
 out=$(scaffold --name desk --runtime app --floor "unmeasured: x" 2>&1)

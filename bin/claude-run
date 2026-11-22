@@ -1,10 +1,13 @@
 #!/bin/bash
 # Drop-in for `claude -p` in every scheduled loop: same args, prints the result text, and
 # appends one line per run (exit, turns, cost, tokens) to $AGENT_OPS_DIR/runs.jsonl,
-# the ledger that bin/heartbeat.py reads.
-# Loop name: $OPS_LOOP, else the repo's folder name.
+# the ledger that bin/heartbeat.py reads. A crash (usage limit, API error) still reports subtype
+# "success": exit and is_error are the truth. denials counts tool calls the permission check refused,
+# which the agent usually works around without saying so; session ties the line to its transcript.
+# Loop name: $OPS_LOOP, else the launchd label (a shell sees 0, or its app's own application.<app>.<pid> name, so neither counts),
+# else the repo's folder name.
 OPS="${AGENT_OPS_DIR:-$HOME/.agent-ops}"; mkdir -p "$OPS"
-LOOP="${OPS_LOOP:-$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")}"
+LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^(0?|application\..*)$ ]] && LOOP=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 args=(); skip=0
 for a in "$@"; do
   if ((skip)); then skip=0; continue; fi
@@ -15,7 +18,7 @@ start=$(date +%s)
 out=$(claude "${args[@]}" --output-format json); code=$?
 [ -s "$OPS/runs.jsonl" ] && [ -n "$(tail -c1 "$OPS/runs.jsonl")" ] && echo >> "$OPS/runs.jsonl"  # never glue onto a cut line
 [ -n "$out" ] && jq -c --arg loop "$LOOP" --arg d "$(date +%FT%T)" --argjson secs $(( $(date +%s) - start )) --argjson exit $code \
-  '{loop:$loop,date:$d,secs:$secs,exit:$exit,subtype,turns:.num_turns,cost:.total_cost_usd,tokens_in:(.usage.input_tokens+.usage.cache_read_input_tokens+.usage.cache_creation_input_tokens),tokens_out:.usage.output_tokens}' \
+  '{loop:$loop,date:$d,secs:$secs,exit:$exit,subtype,is_error,denials:(.permission_denials|length),session:.session_id,turns:.num_turns,cost:.total_cost_usd,tokens_in:(.usage.input_tokens+.usage.cache_read_input_tokens+.usage.cache_creation_input_tokens),tokens_out:.usage.output_tokens}' \
   <<<"$out" >>"$OPS/runs.jsonl" 2>/dev/null \
   || jq -cn --arg loop "$LOOP" --arg d "$(date +%FT%T)" --argjson exit $code '{loop:$loop,date:$d,exit:$exit,subtype:"no_json"}' >>"$OPS/runs.jsonl"
 jq -r '.result // empty' <<<"$out" 2>/dev/null || printf '%s\n' "$out"

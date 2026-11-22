@@ -33,7 +33,7 @@ Then, in the repo you want a loop on, run `/agent-ops-kit:new-loop`, or just ask
 - the charter in `docs/loops/<name>.md`, with your words in its Mission, Good block, hard limits and kill switch, and its Orders in `docs/orders/<name>.md`;
 - the outcome check in `$AGENT_OPS_DIR/checks/<name>.py`, written before the loop's first prompt: today's report landed, and the number in your Floor holds;
 - a runner that exports `OPS_LOOP` with a budget and turn cap, and a schedule file it doesn't install;
-- a row in `$AGENT_OPS_DIR/REGISTRY.md`;
+- a row in `$AGENT_OPS_DIR/REGISTRY.md`, or wherever `AGENT_OPS_REGISTRY` points;
 - whatever the charter relies on that the repo lacks: the grader, the hooks, `claude-run`, `ops-check` and `scripts/mission-guard`.
 
 To change a loop later, run `/agent-ops-kit:new-loop edit <loop>`. Each change goes the way it should: an Orders PR, a founder PR for anything in a mission block, the status line for a pause, `new-loop --reschedule` for a move, or retirement.
