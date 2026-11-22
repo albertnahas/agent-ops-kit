@@ -81,14 +81,14 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/ops-check` | Runs an outcome check and logs pass or fail to the same ledger. |
 | `checks/report-landed.sh` | Example check: today's report landed, on main or its PR branch, with every section. Write one per loop; it's the only definition of "done" that doesn't trust the agent. |
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop, a run over 3x its usual cost or a charter's mission blocks changing, at most every 3 days per alert. Writes `COSTS.md`. |
-| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes; `pr` makes a PR that changes it, the guard, the grader, hooks or CI workflows X; `orders` checks an Orders-only PR. |
+| `bin/mission-guard` | Guards the text inside each charter's `mission` markers. `bless` records it from the default branch; `check` (run by the heartbeat) alerts with a diff when it changes; `pr` makes a PR that changes it, the guard, the grader, hooks or CI workflows X; `orders` checks an Orders-only PR. Product repos keep a copy at `scripts/mission-guard`, and `examples/mission-guard.yml` runs it as a required check. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
 | `fleet/` | The fleet dashboard: `fleet.py` builds `loops.json`, `waiting.json` and `dashboard.html`; `README.md` says what it reads and how each status is decided; `SYNC.md` puts it on claude.ai with your cloud routines. |
 | `skills/` | Claude Code skills: `factory` walks the playbook for a project, `plan-loops` designs and builds the loops a project needs, `fleet` sets up and runs the dashboard and retires loops. |
 | `docs/LOOP_CATALOG.md` | The loop types a product needs, when it needs each, what checks it and who reads its output. |
 | `tests/` | Feeds known commands to both hooks, fixture ledgers to `ops-check` and the heartbeat, and a fixture registry to the fleet builder. |
-| `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, and the support agent. |
+| `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, one that runs the mission guard as a required check, and the support agent. |
 
 ## Limits, honestly
 

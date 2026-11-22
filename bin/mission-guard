@@ -130,7 +130,7 @@ def checkout():
     if why:
         print(f"{why}: can't tell, treat the PR as X")
         sys.exit(2)
-    changed = git(top, "diff", "--name-only", f"origin/{branch}").stdout.split("\n") + \
+    changed = git(top, "diff", "--name-only", "--no-renames", f"origin/{branch}").stdout.split("\n") + \
         git(top, "ls-files", "--others", "--exclude-standard").stdout.split("\n")
     return top, branch, sorted(f for f in set(changed) if f)
 
@@ -167,7 +167,7 @@ def orders():
         b, f = git(top, "show", f"origin/{branch}:{rel}"), Path(top) / rel
         old, new = log(b.stdout if b.returncode == 0 else ""), log(f.read_text() if f.is_file() else "")
         delta = [l for l in difflib.ndiff(old, new) if l[:2] in ("+ ", "- ")]
-        added = [l for l in delta if l.startswith("+ ") and l[2:].strip()]
+        added = [l for l in delta if l.startswith("+ ") and l[2:].strip() and l[2:].strip() != "date | why | by"]
         if any(l.startswith("- ") and l[2:].strip() for l in delta) or len(added) != 1:
             bad.append(f"{rel}: needs exactly one new Changes line and no removed ones ({len(added)} added)")
     print("\n".join(bad + [f"{len(changed)} file(s) checked, {len(bad)} problem(s)"]))

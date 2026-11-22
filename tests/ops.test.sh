@@ -75,6 +75,12 @@ echo "2026-11-23 | another | sup |" >> "$o/c/docs/orders/x.md"
 expect "mission-guard orders refuses two Changes lines" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
 git -C "$o/c" checkout -q -- . ; echo x > "$o/c/README.md"
 expect "mission-guard orders refuses a non-Orders file" "! (cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+git -C "$o/c" checkout -q -- . ; git -C "$o/c" clean -qf; cp examples/orders.md "$o/c/docs/orders/new.md"
+expect "mission-guard orders passes a new Orders file from the example" "(cd $o/c && $PWD/bin/mission-guard orders >/dev/null)"
+rm "$o/c/docs/orders/new.md"; mkdir -p "$o/c/.github/workflows"; echo on: push > "$o/c/.github/workflows/ci.yml"
+git -C "$o/c" add . && git -C "$o/c" -c user.name=t -c user.email=t@t commit -qm ci && git -C "$o/c" push -q origin HEAD:master
+git -C "$o/c" mv .github/workflows/ci.yml .github/ci.yml
+expect "mission-guard pr flags a protected file renamed out" "! (cd $o/c && $PWD/bin/mission-guard pr >/dev/null)"
 rm -rf "$o"
 rm -rf "$g"
 
