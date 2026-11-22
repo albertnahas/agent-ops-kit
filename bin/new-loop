@@ -159,7 +159,7 @@ def main():
     else:
         files[runner] = (TEMPLATES / "run.sh").read_text()
         for k, v in {"name": a.name, "repo": sh(a.repo), "charter": sh(charter.relative_to(a.repo)), "check": sh(check),
-                     "log": sh(OPS / f"logs/{a.name}.log"),                      "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
+                     "log": sh(OPS / f"logs/{a.name}.log"), "turns": str(a.turns), "budget": f"{a.budget:g}"}.items():
             files[runner] = files[runner].replace("{{%s}}" % k, v)
         path = ":".join(dict.fromkeys([str(Path(w).parent) for t in ("claude", "gh", "jq", "python3", "git")
                                        for w in [shutil.which(t)] if w] + ["/usr/bin", "/bin"]))  # cron and launchd start bare
