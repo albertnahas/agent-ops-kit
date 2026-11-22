@@ -4,8 +4,10 @@
 # Usage: tests/fleet.test.sh   Needs bash, jq and python3. Writes only to a temp folder.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-export AGENT_OPS_DIR=$(mktemp -d)
-trap 'rm -rf "$AGENT_OPS_DIR"' EXIT
+export AGENT_OPS_DIR=$(mktemp -d) H=$(mktemp -d)
+trap 'rm -rf "$AGENT_OPS_DIR" "$H"' EXIT
+mkdir "$AGENT_OPS_DIR/bin" && printf '#!/bin/sh\n' | tee "$AGENT_OPS_DIR/bin/crontab" > "$AGENT_OPS_DIR/bin/launchctl"
+chmod +x "$AGENT_OPS_DIR/bin/"* && export PATH="$AGENT_OPS_DIR/bin:$PATH"  # this machine's own jobs stay out of the test
 fail=0
 expect() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 L="$AGENT_OPS_DIR/fleet/loops.json"
@@ -87,5 +89,24 @@ expect "day or weekday, as cron does"          "[ \"\$(fires '0 9 1 * 1' False 2
 expect "day and weekday for an override"       "[ \"\$(fires '0 8 1-7 * 1' True)\" = '2026-12-07 08:00 2027-01-04 08:00' ]"
 expect "a star minute is every minute"         "[ \"\$(fires '* * * * *' False)\" = '2026-11-22 10:01 2026-11-22 10:02' ]"
 expect "weekday ranges wrap"                   "[ \"\$(fires '30 6 * * sat-sun' False)\" = '2026-11-28 06:30 2026-11-29 06:30' ]"
+
+# No registry: every job found shows its own health, from launchd, cron's output files and the cloud snapshot.
+P=$(tests/health-demo.sh "$H") && L=$H/fleet/loops.json
+expect "health: builds with no registry"       "[ -f $P ] && jq -e '.meta[] | select(.label == \"Mode\") | .value == \"health\"' $L >/dev/null"
+expect "health: exit 0 with a fresh log ran"   "[ \"\$(status com.example.morning-digest)\" = ran ]"
+expect "health: an interval job ran"           "[ \"\$(status com.example.inbox-triage)\" = ran ]"
+expect "health: a non-zero exit is failing"    "[ \"\$(status com.example.price-watch)\" = failing ] && [ \"\$(jq -r '.rows[] | select(.loop == \"com.example.price-watch\") | .detail' $L)\" = 'last run exited 1' ]"
+expect "health: an old log makes the last run unknown, not silent" "jq -e '.rows[] | select(.loop == \"com.example.weekly-review\") | .status == \"ran\" and .last_run == null and (.detail | test(\"unknown\"))' $L >/dev/null"
+expect "health: a routine past its period is silent" "[ \"\$(status competitor-digest)\" = silent ]"
+expect "health: a job launchd keeps running is a service" "jq -e '.rows[] | select(.loop == \"com.example.notes-sync\") | .project == \"Service\" and .status == \"service\"' $L >/dev/null"
+expect "health: a dated job is a one-off"      "[ \"\$(status com.example.launch-reminder)\" = one-off ]"
+expect "health: unloaded and vendor jobs stay out" "! jq -e '.rows[] | select(.loop | test(\"old-experiment|vendor\"))' $L >/dev/null"
+expect "health: cron with an output file ran"  "[ \"\$(status cron:backup.sh)\" = ran ]"
+expect "health: cron with no output file has no record" "[ \"\$(status cron:feed-poller.py)\" = 'no record' ]"
+expect "health: cron names skip shells, @reboot is skipped" "[ \"\$(status cron:never-ran.sh)\" = 'no runs yet' ] && ! jq -e '.rows[] | select(.loop | test(\"on-boot|bash|cd\$\"))' $L >/dev/null"
+expect "health: routines show their last status" "[ \"\$(status repo-dependency-check)\" = ran ] && [ \"\$(status release-notes-draft)\" = failing ] && [ -z \"\$(status paused-idea)\" ]"
+expect "health: nothing unregistered, no cost or pass rate" "jq -e '[.rows[] | select(.status == \"unregistered\" or .cost != null or .pass_rate != null)] == []' $L >/dev/null"
+expect "health: no registry path in the data"  "jq -e '.meta[] | select(.label == \"Registry\") | .value == null' $L >/dev/null"
+expect "health: the page is titled Loop health" "grep -q '<title>Loop health</title>' $H/fleet/dashboard.html"
 
 [ "$fail" -eq 0 ] && echo "all passed" || { echo "some failed"; exit 1; }

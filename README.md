@@ -1,5 +1,19 @@
 # agent-ops-kit
 
+**Want to know if your scheduled agent loops are healthy?** One line in Claude Code:
+
+```
+/plugin install loop-health --marketplace albertnahas/agent-ops-kit
+```
+
+Then ask "are my loops healthy?". It finds your launchd jobs and crontab lines (and your Claude Code cloud routines, if you let it read them) and opens one local page: what failed, what went quiet, what hasn't run yet. No registry, no account, nothing to wire up. The scan itself has no model in it, so rebuilding the page costs nothing. Without a run ledger it can only tell you whether a job ran and how it exited, not whether it did its job, and the page says so.
+
+How it differs: OpenRoutine, AgentBeat and Pykero have you move your loops into them or wire each one up. This reads what you already have scheduled, on your machine and in the cloud.
+
+Everything below is the bigger thing those loops came from.
+
+## The factory
+
 A software factory made of Claude Code loops. It's the setup I use to run a live product on a night shift of agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
 Start with the [factory playbook](docs/FACTORY_PLAYBOOK.md): which loops to start and in what order, how each one is checked, what it may cost, when it gets retired, and how big changes get decided as bets with a 14-day test.
@@ -84,7 +98,8 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
 | `fleet/` | The fleet dashboard: `fleet.py` builds `loops.json`, `waiting.json` and `dashboard.html`; `README.md` says what it reads and how each status is decided; `SYNC.md` puts it on claude.ai with your cloud routines. |
-| `skills/` | Claude Code skills: `factory` walks the playbook for a project, `plan-loops` designs and builds the loops a project needs, `fleet` sets up and runs the dashboard and retires loops. |
+| `skills/` | Claude Code skills: `loop-health` scans the machine and shows each loop's health with no setup, `factory` walks the playbook for a project, `plan-loops` designs and builds the loops a project needs, `fleet` sets up and runs the dashboard and retires loops. |
+| `plugins/loop-health/` | The `loop-health` plugin: links to `skills/loop-health` and `fleet/`, so both plugins run the same code. |
 | `docs/LOOP_CATALOG.md` | The loop types a product needs, when it needs each, what checks it and who reads its output. |
 | `tests/` | Feeds known commands to both hooks, fixture ledgers to `ops-check` and the heartbeat, and a fixture registry to the fleet builder. |
 | `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, and the support agent. |

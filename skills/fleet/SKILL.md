@@ -12,7 +12,7 @@ Observe, don't change: never edit, reload or unload a job the user already runs 
 ## Set up
 
 1. Make OPS. Write `OPS/fleet.json` from `KIT/fleet/fleet.example.json`: their GitHub login (`gh api user -q .login`) if `gh` is signed in, where their repos live for `memo_roots`, and drop the `queue` block unless they keep a queue file. Ask only what you can't find.
-2. Inventory. Run `python3 KIT/fleet/fleet.py` once with no registry. Every scheduled job shows as Unregistered in `OPS/fleet/loops.json`. Leave out the vendors' own jobs (the builder already hides programs inside `.app` bundles).
+2. Inventory. Run `python3 KIT/fleet/fleet.py` once with no registry. With no registry the builder lists every scheduled job in `OPS/fleet/loops.json` with its own health, as the `loop-health` skill shows it; once a registry exists, a job with no row shows as Unregistered. Leave out the vendors' own jobs (the builder already hides programs inside `.app` bundles).
 3. Draft `OPS/REGISTRY.md` from `KIT/fleet/REGISTRY.example.md`: one row per loop, from each job's plist or crontab line, its log files and the script it runs. A job with no model in it that runs all the time or only watches goes under Services. Fill **Checked by** from `KIT/docs/LOOP_CATALOG.md` and what the job's script reads. Leave a cell empty rather than guess, and say which ones you couldn't fill.
 4. Show the user the table and get their yes before you write it.
 5. Keep it fresh: offer a launchd job (macOS) or crontab line running `python3 KIT/fleet/fleet.py` every 30 minutes, and on their yes add it and its Services row.

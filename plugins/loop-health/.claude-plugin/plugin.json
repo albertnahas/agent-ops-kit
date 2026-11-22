@@ -1,0 +1,10 @@
+{
+  "name": "loop-health",
+  "version": "0.1.0",
+  "description": "See whether your scheduled agent loops are healthy: launchd, cron and Claude Code cloud routines on one local page. No registry, no account, no model.",
+  "author": { "name": "Albert Nahas", "url": "https://github.com/albertnahas" },
+  "homepage": "https://github.com/albertnahas/agent-ops-kit",
+  "repository": "https://github.com/albertnahas/agent-ops-kit",
+  "license": "MIT",
+  "keywords": ["agents", "loops", "health", "monitoring", "scheduled", "launchd", "cron", "routines"]
+}

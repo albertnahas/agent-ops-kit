@@ -7,6 +7,11 @@
       "name": "agent-ops-kit",
       "source": "./",
       "description": "Start a software factory, plan the loops a project needs and see every loop on one dashboard."
+    },
+    {
+      "name": "loop-health",
+      "source": "./plugins/loop-health",
+      "description": "Scan your machine's scheduled agent loops and see which ones are healthy. One skill, no setup."
     }
   ]
 }

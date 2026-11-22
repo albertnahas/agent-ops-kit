@@ -186,7 +186,7 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
 
 <div class="fx">
   <div class="fx-top" id="top">
-    <div><h1>Loop fleet</h1><p class="fx-muted">Updated <span data-draw="synced">—</span></p></div>
+    <div><h1 data-draw="mode" data-source="loops waiting">Loop fleet</h1><p class="fx-muted">Updated <span data-draw="synced">—</span></p></div>
     <select class="dash-select" id="scope" data-draw="scope" aria-label="Project" data-source="loops waiting"></select>
   </div>
 
@@ -204,7 +204,7 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
       <button type="button" class="fx-kpi" data-go="loops"><span class="k">Loops running</span><span class="v" data-draw="k-loops" data-source="counts" data-field="n" data-where="status=loops">—</span><div class="fx-sub" data-draw="k-loops-sub"></div></button>
       <button type="button" class="fx-kpi" data-go="loops" data-filter="attention"><span class="k">Need a look</span><span class="v" data-draw="k-attn" data-source="counts" data-field="n" data-where="status=attention">—</span><span class="s" data-draw="k-attn-sub">—</span></button>
       <button type="button" class="fx-kpi" data-go="waiting"><span class="k">Waiting on you</span><span class="v" data-draw="k-wait" data-source="counts" data-field="n" data-where="status=waiting">—</span><span class="s" data-draw="k-wait-sub">—</span></button>
-      <div class="fx-kpi"><span class="k">Claude cost, 30 days</span><span class="v" data-draw="k-cost" data-source="cost">—</span><span class="s">estimate, not billed</span></div>
+      <div class="fx-kpi" id="k-cost"><span class="k">Claude cost, 30 days</span><span class="v" data-draw="k-cost" data-source="cost">—</span><span class="s">estimate, not billed</span></div>
     </div>
 
     <div class="fx-cols">
@@ -255,20 +255,20 @@ button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset
     <div class="fx-grid" data-draw="wait-list" data-source="waiting"></div>
   </section>
 
-  <p class="fx-muted" id="foot"><span data-draw="refresh">—</span>. Pass rate and cost cover <span data-draw="window">—</span>. Registry: <code data-draw="registry">—</code>.</p>
+  <p class="fx-muted" id="foot"><span data-draw="refresh">—</span>.<span id="foot-window"> Pass rate and cost cover <span data-draw="window">—</span>.</span><span id="foot-registry"> Registry: <code data-draw="registry">—</code>.</span></p>
 </div>
 
 <script>
 const FX = window.FX = window.FX || {filter: 'all', open: new Set()};
 const NOT_LOOP = ['Service', 'One-off'];
 const URGENT = ['failing', 'silent', 'unregistered', 'chronic', 'stale'];
-const GAPS = ['no check', 'no runs yet'];
+const GAPS = ['no check', 'no runs yet', 'no record'];
 /* the project picked at the top: every count, list and tab shows its rows only; '' is all of them */
 const scoped = (rows, {project} = dash.params()) => rows.filter((r) => !project || r.scope === project);
 const LABEL = {failing: 'Failing', silent: 'Silent', unregistered: 'Unregistered', chronic: 'Flaky', stale: 'Stale data',
-  'no check': 'Unchecked', 'no runs yet': 'Not run yet', healthy: 'Healthy', paused: 'Paused', service: 'Running', 'one-off': 'One-off'};
+  'no check': 'Unchecked', 'no runs yet': 'Not run yet', 'no record': 'No run record', ran: 'Ran', healthy: 'Healthy', paused: 'Paused', service: 'Running', 'one-off': 'One-off'};
 const TONE = {failing: 'bad', silent: 'bad', unregistered: 'warn', chronic: 'warn', stale: 'warn', 'no check': 'none', 'no runs yet': 'none',
-  healthy: 'ok', paused: 'none', service: 'ok', 'one-off': 'none'};
+  'no record': 'none', ran: 'ok', healthy: 'ok', paused: 'none', service: 'ok', 'one-off': 'none'};
 
 dash.calc('counts', {
   title: 'Loop counts',
@@ -281,10 +281,10 @@ dash.calc('counts', {
     const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
     return [
       {status: 'loops', n: real.filter((r) => !['paused', 'unregistered'].includes(r.status)).length},
-      {status: 'healthy', n: by('healthy')},
+      {status: 'healthy', n: by('healthy', 'ran')},
       {status: 'failing', n: by('failing', 'silent')},
       {status: 'attention', n: by('failing', 'silent', 'unregistered', 'chronic', 'stale') + loops.filter((r) => r.project === 'Service' && r.status === 'failing').length},
-      {status: 'unchecked', n: by('no check', 'no runs yet')},
+      {status: 'unchecked', n: by(...GAPS)},
       {status: 'waiting', n: waiting.length},
       {status: 'soon', n: waiting.filter((w) => w.due && w.due <= soon).length},
     ];
@@ -390,7 +390,7 @@ const expandRow = (key, cells, buildMore, tone) => {
   return li;
 };
 /* where a loop runs, from its job: a cloud routine, a desktop-app task, or a launchd job or crontab line on this machine */
-const RUNTIME = {routine: ['cloud', 'Cloud routine'], task: ['app-window', 'Desktop-app task'], local: ['laptop', 'Runs on this machine']};
+const RUNTIME = {routine: ['cloud', 'Cloud routine', 'Cloud routines'], task: ['app-window', 'Desktop-app task', 'Desktop-app tasks'], local: ['laptop', 'Runs on this machine', 'On this machine']};
 const runtimeOf = (r) => r.job ? RUNTIME[r.job.split(':')[0]] || RUNTIME.local : null;
 const runtimeMark = (r) => {
   const k = runtimeOf(r); if (!k) return null;
@@ -407,8 +407,8 @@ const titleCell = (main, sub, tag, mark) => {
   return t;
 };
 const retirePrompt = (r) => 'Retire the scheduled loop "' + r.loop + '" (' + [r.project, r.runtime, r.job].filter(Boolean).join(', ') + '). '
-  + 'Ask me for the reason first, then show me what you will remove and wait for my yes. Stop and remove its schedule, delete its row in '
-  + (metaOf('Registry') || 'the loop registry') + ' and follow any retirement rules that file names. '
+  + 'Ask me for the reason first, then show me what you will remove and wait for my yes. Stop and remove its schedule'
+  + (metaOf('Registry') ? ', delete its row in ' + metaOf('Registry') + ' and follow any retirement rules that file names. ' : '. ')
   + 'Then run python3 ' + (metaOf('Builder') || 'fleet.py') + ' and confirm it is gone.';
 const loopActs = (r) => {
   const acts = el('div', 'fx-acts');
@@ -420,12 +420,12 @@ const loopActs = (r) => {
 const loopMore = (r) => (more) => {
   if (r.detail) { const p = el('p'); p.append(el('b', '', 'Last result: '), document.createTextNode(r.detail)); more.append(p); }
   more.append(el('p', '', [LABEL[r.status], r.schedule, r.job && r.job !== r.loop && r.job, r.checks && r.checks + ' checks passed',
-    r.cost != null ? '$' + r.cost.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' in 30 days' : /cloud|db|app/.test(r.runtime || '') ? 'cost not metered' : null].filter(Boolean).join(' · ')));
+    r.cost != null ? '$' + r.cost.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' in 30 days' : ledger() && /cloud|db|app/.test(r.runtime || '') ? 'cost not metered' : null].filter(Boolean).join(' · ')));
   const acts = loopActs(r); if (acts) more.append(acts);
 };
 const loopRow = (r, key, grouped) => {
   const right = el('span', 'r');
-  right.append(hist(r.history), el('span', '', r.last_run ? rel(r.last_run) : 'never'));
+  right.append(hist(r.history), el('span', '', r.last_run ? rel(r.last_run) : r.result || r.status === 'no record' ? 'unknown' : 'never'));
   return expandRow(key + r.loop, [dot(TONE[r.status], LABEL[r.status]), titleCell(nameOf(r), [!grouped && r.project, nextText(r)].filter(Boolean).join(' · '), null, runtimeMark(r)), right], loopMore(r));
 };
 const waitRow = (r, key) => {
@@ -442,6 +442,10 @@ const waitRow = (r, key) => {
 const failed = (box, what, status) => { box.append(el(box.tagName === 'UL' ? 'li' : 'div', 'fx-empty', status === 'error' ? 'The ' + what + ' failed to load.' : 'Loading…')); };
 const countOf = (s) => { const c = dash.data('counts'); const r = c.status === 'ok' && c.data.find((x) => x.status === s); return r ? r.n : null; };
 const metaOf = (label) => { const l = dash.data('loops'); const m = l.status === 'ok' && (l.meta || []).find((x) => x.label === label); return m ? m.value : null; };
+/* with no registry the page shows each job's own health: no factory graph, no registry, no waiting list unless the
+   config feeds one. Cost and pass rate show only once a ledger feeds them. */
+const health = () => metaOf('Mode') === 'health';
+const ledger = () => { const l = dash.data('loops'); return l.status === 'ok' && l.data.some((r) => r.cost != null || r.checks); };
 const go = (pane, filter) => {
   if (filter) FX.filter = filter;
   document.querySelectorAll('.fx-pane').forEach((p) => { p.hidden = p.id !== pane; });
@@ -456,6 +460,14 @@ document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click'
 if (['loops', 'factory', 'waiting'].includes(location.hash.slice(1))) go(location.hash.slice(1));
 
 /* header */
+dash.draw('mode', (h) => {
+  const w = dash.data('waiting'), quiet = health() && w.status === 'ok' && !w.data.length;
+  h.textContent = health() ? 'Loop health' : 'Loop fleet';
+  const hide = {'tab-factory': health(), 'tab-waiting': quiet, 'next-up': quiet, 'k-cost': !ledger(), 'foot-window': !ledger(), 'foot-registry': health()};
+  Object.entries(hide).forEach(([id, off]) => { document.getElementById(id).hidden = off; });
+  document.querySelector('[data-go="waiting"].fx-kpi').hidden = quiet;
+  if (health() && ['factory', 'waiting'].includes(location.hash.slice(1))) go('overview');
+});
 dash.draw('synced', (e) => { const v = metaOf('Built'); e.textContent = v ? rel(v) : '—'; });
 dash.draw('window', (e) => { e.textContent = metaOf('Pass rate and cost window') || '—'; });
 dash.draw('refresh', (e) => { e.textContent = metaOf('Refresh') || 'Rebuilt by fleet.py'; });
@@ -465,7 +477,7 @@ dash.draw('scope', (sel) => {
   const all = new Set([...l.data, ...w.data, {scope: project}].map((r) => r.scope).filter(Boolean)); /* a pick that left the data still shows */
   const projects = [...all].filter((p) => p !== 'General').sort((a, b) => a.localeCompare(b));
   sel.replaceChildren(new Option('All projects', ''), ...(all.has('General') ? [new Option('General')] : []), ...projects.map((p) => new Option(p)));
-  sel.value = project;
+  sel.value = project; sel.hidden = all.size < 2;
   sel.onchange = () => dash.setParams({project: sel.value});
 });
 dash.draw('badge-loops', (e) => { const n = countOf('attention'); e.textContent = n ? n : ''; });
@@ -477,8 +489,8 @@ dash.draw('banner', (e) => {
   e.replaceChildren();
   if (down == null) { e.textContent = '—'; return; }
   e.dataset.tone = down ? 'bad' : attn ? 'warn' : 'ok';
-  const head = down ? down + (down === 1 ? ' loop is failing' : ' loops are failing') : attn ? 'All loops ran. ' + attn + (attn === 1 ? ' thing needs' : ' things need') + ' a look' : 'All loops are healthy';
-  const sub = soon ? soon + (soon === 1 ? ' item is' : ' items are') + ' due from you in the next two days' : 'Nothing from you is due in the next two days';
+  const head = down ? down + (health() ? (down === 1 ? ' loop failed or went quiet' : ' loops failed or went quiet') : down === 1 ? ' loop is failing' : ' loops are failing') : attn ? 'All loops ran. ' + attn + (attn === 1 ? ' thing needs' : ' things need') + ' a look' : health() ? 'Nothing is failing or late' : 'All loops are healthy';
+  const sub = health() && !countOf('waiting') ? countOf('healthy') + ' of ' + countOf('loops') + ' ran on schedule' : soon ? soon + (soon === 1 ? ' item is' : ' items are') + ' due from you in the next two days' : 'Nothing from you is due in the next two days';
   const text = el('div'); text.append(el('b', '', head), el('span', '', sub));
   e.append(icon(down ? 'octagon' : attn ? 'alert' : 'check', 18), text);
 });
@@ -489,7 +501,7 @@ dash.draw('k-loops-sub', (e) => {
   const loops = countOf('loops'), ok = countOf('healthy'), attn = countOf('attention'), down = countOf('failing');
   e.replaceChildren();
   if (!loops) return;
-  e.append(meter([[ok / loops, 'var(--color-ok)'], [(attn - down) / loops, 'var(--color-warn)'], [down / loops, 'var(--color-bad)']]), el('span', 's', ok + ' healthy'));
+  e.append(meter([[ok / loops, 'var(--color-ok)'], [(attn - down) / loops, 'var(--color-warn)'], [down / loops, 'var(--color-bad)']]), el('span', 's', ok + (health() ? ' ran' : ' healthy')));
 });
 dash.draw('k-attn-sub', (e) => { const f = countOf('failing'); e.textContent = f == null ? '—' : f ? f + ' failing' : 'none failing'; });
 dash.draw('k-wait-sub', (e) => { const o = countOf('soon'); e.textContent = o == null ? '—' : o ? o + ' due within 2 days' : 'none due soon'; });
@@ -503,7 +515,7 @@ dash.draw('attn-list', (box) => {
     .sort((a, b) => URGENT.indexOf(a.status) - URGENT.indexOf(b.status));
   const gaps = scoped(l.data).filter((r) => !NOT_LOOP.includes(r.project) && GAPS.includes(r.status));
   const ul = el('ul', 'fx-list');
-  if (!urgent.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', 'Nothing is failing, flaky or unregistered.')); ul.append(li); }
+  if (!urgent.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', health() ? 'Nothing is failing or late.' : 'Nothing is failing, flaky or unregistered.')); ul.append(li); }
   urgent.forEach((r) => {
     const right = el('span', 'r'); right.append(hist(r.history), el('span', '', LABEL[r.status]));
     ul.append(expandRow('a:' + r.loop, [dot(TONE[r.status], LABEL[r.status]), titleCell(nameOf(r), [r.project, reason(r)].filter(Boolean).join(' · '), null, runtimeMark(r)), right], loopMore(r), TONE[r.status]));
@@ -511,7 +523,7 @@ dash.draw('attn-list', (box) => {
   box.append(ul);
   if (gaps.length) {
     const b = el('button', 'fx-foot'); b.type = 'button';
-    b.append(document.createTextNode(gaps.length + (gaps.length === 1 ? ' loop runs' : ' loops run') + ' with no outcome check'), icon('right', 14));
+    b.append(document.createTextNode(gaps.length + (gaps.length === 1 ? ' loop' : ' loops') + (health() ? ' with no run on record' : (gaps.length === 1 ? ' runs' : ' run') + ' with no outcome check')), icon('right', 14));
     b.onclick = () => go('loops', 'unchecked');
     box.append(b);
   }
@@ -528,7 +540,7 @@ dash.draw('next-list', (ul) => {
 
 /* loops tab */
 dash.draw('loop-filter', (sel) => {
-  sel.replaceChildren(new Option('All loops', 'all'), new Option('Needs a look', 'attention'), new Option('No outcome check', 'unchecked'));
+  sel.replaceChildren(new Option('All loops', 'all'), new Option('Needs a look', 'attention'), new Option(health() ? 'No run on record' : 'No outcome check', 'unchecked'));
   sel.value = FX.filter;
   sel.onchange = () => { FX.filter = sel.value; dash.draw('loop-list'); dash.draw('loop-count'); };
 });
@@ -538,11 +550,11 @@ dash.draw('loop-list', (box) => {
   const l = dash.data('loops');
   box.replaceChildren();
   if (l.status !== 'ok') return failed(box, 'loop list', l.status);
-  const order = [...URGENT, ...GAPS, 'healthy', 'paused'];
+  const order = [...URGENT, ...GAPS, 'healthy', 'ran', 'paused'];
   const rows = scoped(l.data).filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r))
     .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || nameOf(a).localeCompare(nameOf(b)));
   if (!rows.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'No loops match.')); box.append(d); return; }
-  const groups = groupBy(rows, (r) => r.project || 'General');
+  const groups = groupBy(rows, (r) => health() ? (runtimeOf(r) || [, , 'Run ledger'])[2] : r.project || 'General');
   const urgent = (rs) => rs.filter((r) => URGENT.includes(r.status)).length;
   [...groups].sort(([a, ra], [b, rb]) => urgent(rb) - urgent(ra) || rb.length - ra.length || a.localeCompare(b)).forEach(([project, rs]) => {
     const n = urgent(rs), wide = rs.length > 8;
@@ -569,7 +581,7 @@ dash.draw('svc-list', (ul) => {
   if (!svc.length) ul.append(el('li', 'fx-empty', 'No services or one-off jobs here.'));
   svc.forEach((r) => {
     const right = el('span', 'r', r.status === 'one-off' ? rel(r.next_due) : LABEL[r.status]);
-    ul.append(expandRow('s:' + r.loop, [dot(r.status === 'failing' ? 'bad' : TONE[r.status], LABEL[r.status]), titleCell(r.loop, r.job), right], (more) => {
+    ul.append(expandRow('s:' + r.loop, [dot(r.status === 'failing' ? 'bad' : TONE[r.status], LABEL[r.status]), titleCell(r.loop, r.job !== r.loop ? r.job : r.schedule), right], (more) => {
       more.append(el('p', '', [r.schedule, r.detail].filter(Boolean).join('. ')));
       const acts = loopActs(r); if (acts) more.append(acts);
     }));

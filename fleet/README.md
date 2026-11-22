@@ -6,14 +6,14 @@ One page for every scheduled loop you run, across all your projects: whether eac
 python3 fleet/fleet.py && open ~/.agent-ops/fleet/dashboard.html
 ```
 
-It works with nothing set up: an empty fleet shows as such. It gets useful once your loops have a registry (`REGISTRY.example.md`) and log through `bin/claude-run` and `bin/ops-check`. The `fleet` skill sets all of this up for you and never changes a job you already run.
+It works with nothing set up. With no registry it lists every job it finds with that job's own health and titles the page Loop health: what launchd, cron's output files and the cloud snapshot say, and no Factory or Waiting tab, cost or pass rate. That's the `loop-health` plugin. It gets more useful once your loops have a registry (`REGISTRY.example.md`) and log through `bin/claude-run` and `bin/ops-check`. The `fleet` skill sets all of this up for you and never changes a job you already run.
 
 ## What it reads
 
 | Source | Gives | Needed |
 |---|---|---|
-| `REGISTRY.md` | the loops, their project, schedule, charter, check and who checks their output; the services | yes, or every job shows as Unregistered |
-| launchd (`~/Library/LaunchAgents`) and your crontab | what is actually scheduled, last exit, next run | found on its own |
+| `REGISTRY.md` | the loops, their project, schedule, charter, check and who checks their output; the services | no: without it every job shows its own health; with it, a job with no row shows as Unregistered |
+| launchd (`~/Library/LaunchAgents`) and your crontab | what is actually scheduled, last exit, next run; for cron, the time the file a line writes its output to last changed (cron keeps no exit codes) | found on its own |
 | `runs.jsonl` | last run, pass rate, cost, the last 10 outcomes | once loops run through `claude-run` and `ops-check` |
 | `checks/<loop>.py` | an outcome for loops that write no ledger line, like cloud routines | per loop |
 | `fleet/cloud.json` | Claude Code cloud routines and desktop-app tasks: schedule, next and last run | only with the claude.ai sync (`SYNC.md`) |
@@ -24,12 +24,14 @@ Without a ledger, a launchd loop's last exit and the time its log file last chan
 ## Statuses
 
 - **Failing:** the last outcome check failed (or, with no check, the last run exited non-zero).
-- **Silent:** no run for one scheduled period plus 12 hours.
+- **Silent:** no run for one scheduled period plus 12 hours. A log file that stopped changing isn't enough, since many scripts log somewhere else: with nothing better, the last run shows as unknown.
 - **Flaky:** the last check passed but 3 of the last 7 failed.
 - **Unregistered:** running, with no registry row.
 - **Stale data:** the cloud snapshot is over 36 hours old.
 - **Unchecked:** runs, with nothing the builder can read that proves the outcome.
 - **Not run yet**, **Paused** (registered, not loaded or enabled), **Healthy**.
+- **No run record:** a crontab line that sends its output nowhere, so nothing says when it last ran.
+- **Ran** (no registry only): the last run exited 0, or for cron, its output file changed on schedule. Nothing proves it did its job.
 
 ## Factory
 
