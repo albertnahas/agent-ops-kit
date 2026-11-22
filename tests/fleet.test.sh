@@ -63,6 +63,7 @@ expect "a supervisor's job names its loop"     "[ \"\$(sup reader | cut -d' ' -f
 expect "no supervisor is fine"                 "[ \"\$(sup lonely)\" = 'null | null' ]"
 expect "a missing supervisor is flagged"       "[ \"\$(sup fresh)\" = 'ghost | supervisor ghost is not a loop in the registry' ]"
 expect "supervision cycles are flagged"        "sup flaky | grep -q 'comes back to it: flaky → flaky' && sup reader | grep -q 'reader → watched → reader' && sup watched | grep -q 'watched → reader → watched'"
+expect "the registry-only check names the same issues" "! python3 fleet/fleet.py --check > $AGENT_OPS_DIR/issues && diff <(jq -r '.rows[] | select(.supervisor_issue) | \"\\(.loop): \\(.supervisor_issue)\"' $L) $AGENT_OPS_DIR/issues"
 expect "no checker is an empty list"           "jq -e '.rows[] | select(.loop == \"lonely\") | .checked_by == []' $L >/dev/null"
 expect "cost comes from the ledger"            "jq -e '.rows[] | select(.loop == \"good\") | .cost == 2' $L >/dev/null"
 expect "a project is its own scope"           "[ \"\$(scope good)\" = Shop ]"

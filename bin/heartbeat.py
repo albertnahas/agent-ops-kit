@@ -5,11 +5,12 @@ Reads $AGENT_OPS_DIR/runs.jsonl (written by claude-run and ops-check) and alerts
 - failed its last outcome check (or, with no check, its last Claude run didn't end in success)
 - went silent: no run for twice its usual gap
 - cost over 3x its median on the last run
+Also alerts on each registry row whose Supervisor isn't a loop or comes back to it (fleet/fleet.py --check).
 Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY (a command
 called with a subject and a body; unset, it prints them), then logs its own pass line. If
 $AGENT_OPS_DIR is a git repo with a remote, it commits and pushes, so a second watchman in the
 cloud can check that line is fresh (examples/heartbeat-watch-prompt.md)."""
-import datetime as dt, json, os, shlex, subprocess
+import datetime as dt, json, os, shlex, subprocess, sys
 from pathlib import Path
 
 OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops"))
@@ -49,6 +50,13 @@ for loop, rs in by_loop.items():
     costs = [r["cost"] for r in claude[:-1] if r.get("cost")]
     if len(costs) >= 5 and (claude[-1].get("cost") or 0) > 3 * median(costs):
         alerts[f"cost:{loop}:{claude[-1]['date'][:10]}"] = f"{loop}: last run cost ${claude[-1]['cost']:.2f}, over 3x its usual ${median(costs):.2f}."
+
+fleet = subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "fleet/fleet.py"), "--check"], capture_output=True, text=True)
+for line in fleet.stdout.splitlines():
+    loop, _, issue = line.partition(": ")
+    alerts[f"supervisor:{loop}"] = f"{loop}: {issue}. Fix its Supervisor cell in the registry."
+if fleet.returncode and not fleet.stdout.strip():
+    alerts["fleet-check"] = "fleet.py --check failed, so no Supervisor is checked: " + fleet.stderr.strip()[-400:]
 
 since = lambda days: (now - dt.timedelta(days=days)).isoformat()
 cost = lambda rs, days: sum(r.get("cost") or 0 for r in rs if "check" not in r and r["date"] >= since(days))

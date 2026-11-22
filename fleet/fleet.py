@@ -180,10 +180,31 @@ def ledger(now):
         }
     return out, first
 
+def tables():
+    md = C["registry"].read_text() if C["registry"].exists() else ""
+    return table(md, "Registry"), table(md, "Services")
+
+def links(registry, services):
+    """Each registry loop's Checked by and Supervisor. A name is a loop's or service's name or its job, with or without the
+    routine:/task: prefix, or you; any other name is kept as written, a checker the registry doesn't have. Supervisor,
+    optional, is the one loop that writes this loop's Orders (or you): a parent that is no loop, or a chain that comes
+    back to the row, is its supervisor_issue."""
+    named = [(r["Loop"], r["Job"]) for r in registry] + [(r["Service"], r["Job"]) for r in services]
+    alias = {k: n for n, j in named for k in (j, j.partition(":")[2]) if k} | {n: n for n, _ in named}
+    resolve = lambda c: "you" if c.lower() == "you" else alias.get(c, c)
+    out = {r["Loop"]: {"checked_by": list(dict.fromkeys(resolve(c.strip()) for c in r.get("Checked by", "").split(",") if c.strip())),
+                       "supervisor": resolve(r.get("Supervisor", "").strip()) if r.get("Supervisor", "").strip() else None} for r in registry}
+    for loop, l in out.items():
+        chain, up = [loop], l["supervisor"]
+        while up in out and up not in chain: chain.append(up); up = out[up]["supervisor"]
+        l["supervisor_issue"] = (f"supervisor {l['supervisor']} is not a loop in the registry" if l["supervisor"] not in {**out, "you": 0, None: 0}
+                                 else "supervision comes back to it: " + " → ".join(chain + [up]) if up == loop else None)
+    return out
+
 def build():
     now = dt.datetime.now().replace(microsecond=0)
-    md = C["registry"].read_text() if C["registry"].exists() else ""
-    registry, services = table(md, "Registry"), table(md, "Services")
+    registry, services = tables()
+    link = links(registry, services)
     jobs = {**launchd_jobs(), **cron_jobs()}
     led, first = ledger(now)
     snap_file = C["out"] / "cloud.json"
@@ -205,9 +226,7 @@ def build():
         row = {"loop": loop, "project": reg.get("Project", ""), "runtime": reg.get("Runtime", ""), "job": job,
                "schedule": (reg.get("Schedule", "").replace(override.group(0), "") if override else reg.get("Schedule", "")).replace("`", "").strip(" ()"),
                "last_run": None, "result": None, "detail": "", "next_due": None,
-               "pass_rate": None, "checks": None, "cost": None, "status": None,
-               "checked_by": [c.strip() for c in reg.get("Checked by", "").split(",") if c.strip()],
-               "supervisor": reg.get("Supervisor", "").strip() or None}
+               "pass_rate": None, "checks": None, "cost": None, "status": None, **link[loop]}
         spec, live, j = None, True, None
         if kind == "local":
             j = jobs.get(ref)
@@ -265,22 +284,6 @@ def build():
                      "schedule": svc.get("What it is", ""),
                      "status": "paused" if not j.get("loaded") else "service" if j.get("exit") in (0, None) else "failing",
                      "detail": f"last run exited {j['exit']}" if j.get("exit") not in (0, None) else ""})
-
-    # Checked by names a loop or service by its name or its job, with or without the routine:/task: prefix, or you;
-    # any other name is kept as written, a checker the registry doesn't have.
-    alias = {k: r["loop"] for r in rows for k in (r["job"], r["job"].partition(":")[2]) if k} | {r["loop"]: r["loop"] for r in rows}
-    resolve = lambda c: "you" if c.lower() == "you" else alias.get(c, c)
-    loops = {r["loop"]: r for r in rows if "checked_by" in r}
-    for r in loops.values():
-        r["checked_by"] = list(dict.fromkeys(map(resolve, r["checked_by"])))
-        r["supervisor"] = r["supervisor"] and resolve(r["supervisor"])
-    # Supervisor, optional, is the one loop that writes this loop's Orders (or you). A parent that is no loop, or a
-    # chain that comes back to the row, is flagged on it.
-    for r in loops.values():
-        chain, up = [r["loop"]], r["supervisor"]
-        while up in loops and up not in chain: chain.append(up); up = loops[up]["supervisor"]
-        r["supervisor_issue"] = (f"supervisor {r['supervisor']} is not a loop in the registry" if r["supervisor"] not in {**loops, "you": 0, None: 0}
-                                 else "supervision comes back to it: " + " → ".join(chain + [up]) if up == r["loop"] else None)
 
     for label, j in jobs.items():
         if label in claimed or j["vendor"] or not j["loaded"]: continue
@@ -425,6 +428,10 @@ def html(rows, items, meta):
         f'<div id="dash-root">\n{page}\n</div>\n</body></html>\n')
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--check"]:  # registry only, for the heartbeat: one "loop: issue" line each, exit 1 if any
+        issues = [f"{loop}: {l['supervisor_issue']}" for loop, l in links(*tables()).items() if l["supervisor_issue"]]
+        if issues: print("\n".join(issues))
+        sys.exit(bool(issues))
     rows = build()
     counts = {}
     for r in rows: counts[r["status"]] = counts.get(r["status"], 0) + 1
