@@ -1,0 +1,21 @@
+{
+  "registry": "~/.agent-ops/REGISTRY.md",
+  "ledger": "~/.agent-ops/runs.jsonl",
+  "checks": "~/.agent-ops/checks",
+  "out": "~/.agent-ops/fleet",
+  "refresh": "Rebuilt every 30 minutes by fleet.py",
+  "waiting": {
+    "github": {
+      "owner": "your-github-login",
+      "label": "founder",
+      "memo_roots": ["~/code"],
+      "decisions": "Founder decisions",
+      "awaiting": "Awaiting founder"
+    },
+    "queue": {
+      "path": "~/.agent-ops/QUEUE.md",
+      "owner": "You",
+      "link": null
+    }
+  }
+}

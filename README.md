@@ -2,7 +2,7 @@
 
 The setup I use to run a live product on a night shift of Claude Code agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
-On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this setup has merged 157 PRs since July 2026. 114 came from the scheduled loop and the rest from Claude Code sessions I directed. One was reverted. The full numbers, with the method, are at [nightshiftdev.xyz/log](https://nightshiftdev.xyz/log).
+On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 PRs have merged since July 2026 (as of 21 Nov). The loops opened 170 of them, 77 of which are daily reports. The rest came from Claude Code sessions I directed and a few dependency bots. No loop PR has been reverted. The one revert on main since July undid a pricing change I pushed myself.
 
 ## What's inside
 
@@ -13,10 +13,27 @@ On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, this
 - **Inspector:** a fresh-context grader grades every PR A, B, C or X. It never saw the author's reasoning, only the merge policy, the PR body and the diff. `.claude/agents/pr-grader.md`
 - **Watchman:** every run is logged with its cost and judged by a free outcome check, not by Claude's exit code. A heartbeat alerts you on a failed, silent or costly loop, and a second watchman in the cloud alerts you if the heartbeat stops. `bin/`, `checks/`
 
+**The control room**
+
+- **Fleet dashboard:** one page for every scheduled loop you run, across all your projects: healthy or not, when it runs next, what it cost, who checks its output, and everything waiting on you. Built with no model from your registry, launchd, cron and the run ledger, so it's free to rebuild. `fleet/`
+- **Loop planner:** reads a project and proposes the loops it needs from a catalog of the ones that earned their keep, then builds the ones you approve with a charter, an outcome check, a schedule and a registry row. `skills/plan-loops`, `docs/LOOP_CATALOG.md`
+
 **The rules they work by** (`docs/AGENT_LOOP.md`)
 
 - **Blast radius:** A merges itself, B gets fixed then merged, C gets closed, X waits for you. X means a revert won't fully undo it: money, data-destroying migrations, auth, secrets, new dependencies, paid API spend, deleting user data, the policy itself. The charter also lists what isn't X. Without that list a careful grader escalates everything and the real escalations drown.
 - **Proof videos:** every PR a user would see ships a phone-width Playwright video of the journey. Tests pass while artwork is hidden. A video doesn't.
+
+## Install as a Claude Code plugin
+
+```
+/plugin install agent-ops-kit --marketplace albertnahas/agent-ops-kit
+```
+
+Then ask Claude Code to "set up my fleet dashboard" (the `fleet` skill) or "plan the loops this project needs" (the `plan-loops` skill). Nothing it schedules or changes happens without your yes.
+
+No plugins? Paste this into Claude Code instead:
+
+> Clone https://github.com/albertnahas/agent-ops-kit to ~/.agent-ops/kit, read its skills/fleet/SKILL.md and follow "Set up". Ask me before you schedule anything or write my crontab.
 
 ## Try it in 5 minutes
 
@@ -37,7 +54,7 @@ cp -R .claude bin checks docs scripts tests /path/to/your-repo/
 ```
 
 ```bash
-cd /path/to/your-repo && gh label create founder && gh repo edit --delete-branch-on-merge
+cd /path/to/your-repo && for l in founder grade:A grade:B grade:C grade:X; do gh label create "$l"; done; gh repo edit --delete-branch-on-merge
 ```
 
 1. Fill in every `<placeholder>` in `docs/AGENT_LOOP.md` and add your own X surfaces.
@@ -63,7 +80,10 @@ The support agent comes later. It needs a product with a ticket table and a depl
 | `bin/heartbeat.py` | Alerts through `$AGENT_OPS_NOTIFY` on a failed check, a silent loop or a run over 3x its usual cost, at most every 3 days per alert. Writes `COSTS.md`. |
 | `scripts/night-summary.sh` | What merged, closed and escalated overnight, plus any reverts. |
 | `scripts/loop-stats.sh` | Your track record as JSON: commits and merged PRs per month, reverts, escalations. Publish it. |
-| `tests/` | Feeds known commands to both hooks, and fixture ledgers to `ops-check` and the heartbeat. |
+| `fleet/` | The fleet dashboard: `fleet.py` builds `loops.json`, `waiting.json` and `dashboard.html`; `README.md` says what it reads and how each status is decided; `SYNC.md` puts it on claude.ai with your cloud routines. |
+| `skills/` | Claude Code skills: `fleet` sets up and runs the dashboard and retires loops, `plan-loops` designs and builds the loops a project needs. |
+| `docs/LOOP_CATALOG.md` | The loop types a product needs, when it needs each, what checks it and who reads its output. |
+| `tests/` | Feeds known commands to both hooks, fixture ledgers to `ops-check` and the heartbeat, and a fixture registry to the fleet builder. |
 | `examples/` | A crontab, cloud task prompts for the loop and the cloud watcher, a GitHub Actions workflow that grades in CI, and the support agent. |
 
 ## Limits, honestly
@@ -72,13 +92,4 @@ The support agent comes later. It needs a product with a ticket table and a depl
 - "Verified" for UI means the author rendered the page and attached a screenshot and console output. That evidence still comes from the author, and it's the weakest link.
 - This has run on one product with one human. If you run it on a team, I'd like to hear what breaks.
 
-## Guides
-
-The reasoning behind each piece, with the incidents that shaped it:
-
-- [Agent charter](https://nightshiftdev.xyz/guides/agent-charter)
-- [AI PR review and auto-merge](https://nightshiftdev.xyz/guides/ai-pr-review-auto-merge)
-- [Claude Code hooks](https://nightshiftdev.xyz/guides/claude-code-hooks)
-- [Run Claude Code on a schedule](https://nightshiftdev.xyz/guides/run-claude-code-on-a-schedule)
-
-MIT licensed. By [Albert Nahas](https://nightshiftdev.xyz).
+MIT licensed. By [Albert Nahas](https://github.com/albertnahas).

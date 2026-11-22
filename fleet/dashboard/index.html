@@ -1,0 +1,488 @@
+<meta name="dash-one-writer">
+<style>
+/* Control panel, narrow-first: tabs (Overview, Loops, Waiting), one status line, four numbers, short lists that open for detail. */
+.fx [hidden] { display: none !important; }
+.fx { display: grid; gap: var(--cds-gap-md); font-family: var(--font-anthropic-sans); color: var(--color-fg); font-size: var(--cds-font-size-body); }
+.fx-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cds-gap-sm); }
+.fx-top h1 { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 600; letter-spacing: -.01em; font-size: var(--cds-font-size-title); }
+.fx-muted { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 0; }
+
+.fx-tabs { display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: color-mix(in srgb, var(--color-fg) 7%, transparent); }
+.fx-tab { flex: 1; font: inherit; font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); background: none; border: 0; border-radius: 7px; padding: 7px 8px; cursor: pointer; display: inline-flex; justify-content: center; align-items: center; gap: 6px; transition: opacity 120ms; }
+.fx-tab[aria-selected="true"] { background: var(--color-bg); color: var(--color-fg); font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 0 0 1px var(--color-border-line); }
+.fx-tab:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+.fx-badge { min-width: 18px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; background: var(--color-fg); color: var(--color-bg); font-variant-numeric: tabular-nums; }
+.fx-badge:empty { display: none; }
+.fx-pane { display: grid; gap: var(--cds-gap-md); min-width: 0; }
+
+.fx-banner { --tone: var(--color-fg-muted); display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border-radius: var(--cds-radius); border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent); border-left: 4px solid var(--tone); background: color-mix(in srgb, var(--tone) 9%, var(--color-bg)); }
+.fx-banner svg { flex: none; margin-top: 1px; }
+.fx-banner b { display: block; font-weight: 600; }
+.fx-banner span { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.fx-banner svg { color: var(--tone); }
+.fx-banner[data-tone="ok"] { --tone: var(--color-ok); }
+.fx-banner[data-tone="warn"] { --tone: var(--color-warn); }
+.fx-banner[data-tone="bad"] { --tone: var(--color-bad); }
+
+.fx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--cds-gap-sm); }
+.fx-kpi { all: unset; box-sizing: border-box; background: var(--color-bg); padding: 14px 16px; display: grid; gap: 2px; align-content: start; min-width: 0; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); box-shadow: 0 1px 3px rgb(0 0 0 / .08); }
+button.fx-kpi { cursor: pointer; }
+button.fx-kpi:hover { border-color: color-mix(in srgb, var(--color-fg) 35%, transparent); }
+button.fx-kpi:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+.fx-kpi .k { font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); }
+.fx-kpi .v { font-family: var(--font-anthropic-serif); font-weight: 600; letter-spacing: -.02em; font-size: 1.75rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.fx-kpi .s { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.fx-kpi .v[data-tone="bad"] { color: var(--color-bad); }
+.fx-kpi .v[data-tone="warn"] { color: var(--color-warn); }
+.fx-sub { display: grid; gap: 5px; margin-top: 2px; }
+.fx-meter { height: 4px; border-radius: 2px; background: var(--cds-chart-grid); overflow: hidden; display: flex; }
+.fx-meter span { display: block; height: 100%; }
+
+.fx-card { border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); min-width: 0; overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / .08); }
+.fx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: var(--cds-gap-md); align-items: start; }
+.fx-span { grid-column: 1 / -1; }
+@media (min-width: 820px) {
+  .fx-list.fx-two { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  .fx-list.fx-two > li { border-top: 1px solid var(--color-border-line); }
+  .fx-list.fx-two > li:nth-child(odd) { border-right: 1px solid var(--color-border-line); }
+  .fx-list.fx-two > li:nth-child(-n+2) { border-top: 0; }
+}
+.fx-card { --sec: var(--fx-c0, var(--color-fg-muted)); border-top: 3px solid var(--sec); }
+.fx-card > header, .fx-group, .fx-bar { background: color-mix(in srgb, var(--sec) 10%, var(--color-bg)); }
+.fx-card h2, .fx-group > span:first-child { color: color-mix(in srgb, var(--sec) 70%, var(--color-fg)); }
+.fx-foot { background: color-mix(in srgb, var(--sec) 6%, var(--color-bg)); }
+#attention { --sec: var(--color-warn); }
+#services { --sec: var(--fx-c5, var(--color-fg-muted)); }
+.fx-card[data-sec="bad"] { --sec: var(--color-bad); }
+.fx-card[data-sec="warn"] { --sec: var(--color-warn); }
+.fx-card[data-sec="c1"] { --sec: var(--fx-c1); }
+.fx-card[data-sec="c2"] { --sec: var(--fx-c2); }
+.fx-card[data-sec="c4"] { --sec: var(--fx-c4); }
+.fx-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); padding: 11px 14px; border-bottom: 1px solid var(--color-border-line); }
+.fx-card h2, .fx-group { margin: 0; font-size: var(--cds-font-size-caption); font-weight: 600; color: var(--color-fg); text-transform: uppercase; letter-spacing: .05em; }
+.fx-group { padding: 10px 14px; border-bottom: 1px solid var(--color-border-line); display: flex; justify-content: space-between; }
+.fx-link { all: unset; cursor: pointer; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.fx-link:hover { color: var(--color-fg); }
+.fx-link:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; border-radius: 2px; }
+.fx-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--cds-gap-md); align-items: start; }
+
+.fx-list { list-style: none; margin: 0; padding: 0; }
+.fx-list > li + li { border-top: 1px solid var(--color-border-line); }
+.fx-row { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 14px; align-items: center; column-gap: 10px; padding: 10px 14px; cursor: pointer; }
+.fx-row { border-left: 3px solid transparent; }
+.fx-row:hover { background: color-mix(in srgb, var(--color-fg) 5%, var(--color-bg)); }
+.fx-row[data-tone="bad"] { border-left-color: var(--color-bad); }
+.fx-row[data-tone="warn"] { border-left-color: var(--color-warn); }
+.fx-row:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+.fx-row .t { min-width: 0; }
+.fx-row .t > span { font-weight: var(--cds-font-weight-medium); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-row .t small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin-top: 1px; }
+.fx-row .r { display: grid; justify-items: end; gap: 4px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fx-row .late { color: var(--color-bad); font-weight: var(--cds-font-weight-medium); }
+.fx-row .soon { color: var(--color-warn); font-weight: var(--cds-font-weight-medium); }
+.fx-row svg.chev { color: var(--color-fg-muted); transition: transform 120ms; }
+.fx-row[aria-expanded="true"] svg.chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .fx-row svg.chev { transition: none; } }
+.fx-more { padding: 0 14px 12px 35px; display: grid; gap: 8px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.fx-more p { margin: 0; max-width: 70ch; overflow-wrap: anywhere; }
+.fx-more b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.fx-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fx-btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 6px; padding: 5px 10px; cursor: pointer; text-decoration: none; transition: opacity 120ms; }
+.fx-btn:hover { opacity: .8; }
+.fx-btn:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+.fx-btn code { font-size: inherit; }
+.fx-empty { padding: 14px; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); display: flex; gap: 8px; align-items: center; }
+.fx-empty svg { color: var(--color-ok); flex: none; }
+.fx-foot { all: unset; box-sizing: border-box; width: 100%; display: flex; justify-content: center; align-items: center; gap: 4px; padding: 10px 14px; border-top: 1px solid var(--color-border-line); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); cursor: pointer; }
+.fx-foot:hover { color: var(--color-fg); background: var(--color-panel); }
+.fx-foot:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+
+.fx-dot { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; background: var(--color-fg-muted); }
+.fx-dot[data-tone="ok"] { background: var(--color-ok); }
+.fx-dot[data-tone="bad"] { background: var(--color-bad); }
+.fx-dot[data-tone="warn"] { background: var(--color-warn); }
+.fx-dot[data-tone="none"] { background: transparent; border: 1.5px solid var(--color-fg-muted); }
+.fx-tag { display: inline-block; font-size: 11px; font-weight: 600; line-height: 16px; padding: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--color-fg) 8%, transparent); color: var(--color-fg); margin-right: 6px; vertical-align: 1px; }
+
+.fx-hist { display: flex; gap: 2px; height: 12px; align-items: stretch; }
+.fx-hist i { width: 4px; border-radius: 1px; background: var(--color-ok); opacity: .85; }
+.fx-hist i.f { background: var(--color-bad); opacity: 1; }
+
+.fx-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); padding: 10px 14px; border-bottom: 1px solid var(--color-border-line); }
+.fx-bar .dash-select { min-width: 0; max-width: 60%; }
+.fx-toolbar { border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); }
+.fx-group small { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--color-fg-muted); margin-left: 8px; }
+</style>
+
+<div class="fx">
+  <div class="fx-top" id="top">
+    <h1>Loop fleet</h1>
+    <p class="fx-muted">Updated <span data-draw="synced">—</span></p>
+  </div>
+
+  <div class="fx-tabs" role="tablist" aria-label="Views">
+    <button type="button" class="fx-tab" role="tab" id="tab-overview" data-pane="overview" aria-selected="true">Overview</button>
+    <button type="button" class="fx-tab" role="tab" id="tab-loops" data-pane="loops" aria-selected="false">Loops <span class="fx-badge" data-draw="badge-loops"></span></button>
+    <button type="button" class="fx-tab" role="tab" id="tab-waiting" data-pane="waiting" aria-selected="false">Waiting <span class="fx-badge" data-draw="badge-waiting"></span></button>
+  </div>
+
+  <section class="fx-pane" id="overview" role="tabpanel" aria-labelledby="tab-overview">
+    <div class="fx-banner" id="status" data-draw="banner" data-source="counts">—</div>
+
+    <div class="fx-kpis" id="kpis">
+      <button type="button" class="fx-kpi" data-go="loops"><span class="k">Loops running</span><span class="v" data-draw="k-loops" data-source="counts" data-field="n" data-where="status=loops">—</span><div class="fx-sub" data-draw="k-loops-sub"></div></button>
+      <button type="button" class="fx-kpi" data-go="loops" data-filter="attention"><span class="k">Need a look</span><span class="v" data-draw="k-attn" data-source="counts" data-field="n" data-where="status=attention">—</span><span class="s" data-draw="k-attn-sub">—</span></button>
+      <button type="button" class="fx-kpi" data-go="waiting"><span class="k">Waiting on you</span><span class="v" data-draw="k-wait" data-source="counts" data-field="n" data-where="status=waiting">—</span><span class="s" data-draw="k-wait-sub">—</span></button>
+      <div class="fx-kpi"><span class="k">Claude cost, 30 days</span><span class="v" data-draw="k-cost" data-source="cost">—</span><span class="s">estimate, not billed</span></div>
+    </div>
+
+    <div class="fx-cols">
+      <section class="fx-card" id="attention">
+        <header><h2>Needs a look</h2></header>
+        <div data-draw="attn-list" data-source="loops"></div>
+      </section>
+      <section class="fx-card" id="next-up">
+        <header><h2>Next up for you</h2><button type="button" class="fx-link" data-go="waiting">See all</button></header>
+        <ul class="fx-list" data-draw="next-list" data-source="waiting"></ul>
+      </section>
+    </div>
+  </section>
+
+  <section class="fx-pane" id="loops" role="tabpanel" aria-labelledby="tab-loops" hidden>
+    <div class="fx-bar fx-toolbar">
+      <span class="fx-muted" data-draw="loop-count">—</span>
+      <select class="dash-select" id="loop-filter" data-draw="loop-filter" aria-label="Show loops" data-source="loops"></select>
+    </div>
+    <div class="fx-grid" id="loop-groups" data-draw="loop-list" data-source="loops"></div>
+    <section class="fx-card" id="services">
+      <header><h2>Services and one-off jobs</h2><span class="fx-muted" data-draw="svc-count">—</span></header>
+      <ul class="fx-list fx-two" data-draw="svc-list" data-source="loops"></ul>
+    </section>
+  </section>
+
+  <section class="fx-pane" id="waiting" role="tabpanel" aria-labelledby="tab-waiting" hidden>
+    <div class="fx-grid" data-draw="wait-list" data-source="waiting"></div>
+  </section>
+
+  <p class="fx-muted" id="foot"><span data-draw="refresh">—</span>. Pass rate and cost cover <span data-draw="window">—</span>. Registry: <code data-draw="registry">—</code>.</p>
+</div>
+
+<script>
+const FX = window.FX = window.FX || {filter: 'all', open: new Set()};
+const NOT_LOOP = ['Service', 'One-off'];
+const URGENT = ['failing', 'silent', 'unregistered', 'chronic', 'stale'];
+const GAPS = ['no check', 'no runs yet'];
+const LABEL = {failing: 'Failing', silent: 'Silent', unregistered: 'Unregistered', chronic: 'Flaky', stale: 'Stale data',
+  'no check': 'Unchecked', 'no runs yet': 'Not run yet', healthy: 'Healthy', paused: 'Paused', service: 'Running', 'one-off': 'One-off'};
+const TONE = {failing: 'bad', silent: 'bad', unregistered: 'warn', chronic: 'warn', stale: 'warn', 'no check': 'none', 'no runs yet': 'none',
+  healthy: 'ok', paused: 'none', service: 'ok', 'one-off': 'none'};
+
+dash.calc('counts', {
+  title: 'Loop counts',
+  description: 'Loops running (registered, not paused), healthy, failing or silent, needing a look (failing, silent, unregistered, flaky or stale, plus failing services), with no outcome check, items waiting on you, and those due within two days.',
+  inputs: ['loops', 'waiting'],
+  fn: (loops, waiting) => {
+    const real = loops.filter((r) => !['Service', 'One-off'].includes(r.project));
+    const by = (...s) => real.filter((r) => s.includes(r.status)).length;
+    const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+    return [
+      {status: 'loops', n: real.filter((r) => !['paused', 'unregistered'].includes(r.status)).length},
+      {status: 'healthy', n: by('healthy')},
+      {status: 'failing', n: by('failing', 'silent')},
+      {status: 'attention', n: by('failing', 'silent', 'unregistered', 'chronic', 'stale') + loops.filter((r) => r.project === 'Service' && r.status === 'failing').length},
+      {status: 'unchecked', n: by('no check', 'no runs yet')},
+      {status: 'waiting', n: waiting.length},
+      {status: 'soon', n: waiting.filter((w) => w.due && w.due <= soon).length},
+    ];
+  },
+});
+dash.calc('cost', {
+  title: 'Claude cost, 30 days',
+  description: 'Sum of every loop\'s API-equivalent cost estimate from runs.jsonl over the window in the footer.',
+  inputs: ['loops'],
+  fn: (loops) => Math.round(loops.reduce((s, r) => s + (Number(r.cost) || 0), 0)),
+});
+
+/* helpers; icons are Lucide paths */
+const ICONS = {
+  check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  octagon: '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
+  ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+};
+const icon = (name, size, cls) => {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  [['viewBox', '0 0 24 24'], ['width', size || 16], ['height', size || 16], ['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '2'],
+   ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']].forEach(([k, v]) => s.setAttribute(k, v));
+  if (cls) s.setAttribute('class', cls);
+  s.innerHTML = ICONS[name];
+  return s;
+};
+const groupBy = (rows, key) => rows.reduce((m, r) => m.set(key(r), [...(m.get(key(r)) || []), r]), new Map());
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const dot = (tone, label) => { const d = el('span', 'fx-dot'); d.dataset.tone = tone; if (label) { d.setAttribute('role', 'img'); d.setAttribute('aria-label', label); } return d; };
+const nameOf = (r) => r.loop.replace(/^(?:[\w-]+\.)+(?=[^.]+$)/, '');
+const today = () => new Date().toISOString().slice(0, 10);
+const dayDiff = (iso) => Math.round((new Date(iso + 'T12:00') - new Date(today() + 'T12:00')) / 864e5);
+const dayMonth = (iso) => new Date(iso.slice(0, 10) + 'T12:00').toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+const rel = (iso) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || '';
+  if (iso.length === 10) { const d = dayDiff(iso); return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d < 0 ? -d + 'd late' : d < 7 ? new Date(iso + 'T12:00').toLocaleDateString('en-GB', {weekday: 'short'}) : dayMonth(iso); }
+  const m = Math.round((new Date(iso) - Date.now()) / 60000), a = Math.abs(m);
+  const v = a < 60 ? a + 'm' : a < 1440 ? Math.round(a / 60) + 'h' : Math.round(a / 1440) + 'd';
+  return a < 2 ? 'now' : m < 0 ? v + ' ago' : 'in ' + v;
+};
+const nextText = (r) => {
+  if (!r.next_due) return '';
+  if (!/^\d/.test(r.next_due)) return r.next_due.replace('every ', 'every ');
+  return new Date(r.next_due) < new Date() ? 'due now' : 'next ' + rel(r.next_due);
+};
+const meter = (parts) => {
+  const m = el('div', 'fx-meter');
+  parts.forEach(([share, color]) => { const s = el('span'); s.style.width = (Math.max(0, share) * 100) + '%'; s.style.background = color; m.append(s); });
+  return m;
+};
+const hist = (h) => {
+  const box = el('span', 'fx-hist');
+  if (!h) return box;
+  const fails = (h.match(/f/g) || []).length;
+  box.setAttribute('role', 'img'); box.setAttribute('aria-label', 'Last ' + h.length + ' runs: ' + fails + ' failed');
+  [...h].forEach((c) => box.append(el('i', c === 'f' ? 'f' : '')));
+  return box;
+};
+const linkBtn = (url, label) => {
+  if (!url || !/^https?:\/\//.test(url)) return null;
+  const a = el('a', 'fx-btn'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.append(icon('ext', 14), document.createTextNode(label));
+  return a;
+};
+const copyBtn = (cmd, label) => {
+  const b = el('button', 'fx-btn'); b.type = 'button'; b.title = cmd;
+  const txt = el('span', '', label);
+  b.append(icon('copy', 14), txt);
+  b.onclick = () => navigator.clipboard.writeText(cmd)
+    .then(() => { txt.textContent = 'Copied'; setTimeout(() => { txt.textContent = label; }, 1500); })
+    .catch(() => { txt.replaceWith(el('code', '', cmd)); });
+  return b;
+};
+const reason = (r) => ({
+  failing: r.detail || 'Last outcome check failed',
+  silent: 'No run since ' + rel(r.last_run),
+  chronic: (r.detail || '').split('. ')[0],
+  unregistered: 'Running with no registry row',
+  stale: 'Routine snapshot is out of date',
+}[r.status] || r.detail || '');
+
+const expandRow = (key, cells, buildMore, tone) => {
+  const li = el('li');
+  const btn = el('button', 'fx-row'); btn.type = 'button';
+  if (tone) btn.dataset.tone = tone;
+  const open = FX.open.has(key);
+  btn.setAttribute('aria-expanded', String(open));
+  btn.append(...cells, icon('chev', 14, 'chev'));
+  const more = el('div', 'fx-more'); more.hidden = !open;
+  buildMore(more);
+  btn.onclick = () => {
+    const show = more.hidden; more.hidden = !show; btn.setAttribute('aria-expanded', String(show));
+    if (show) FX.open.add(key); else FX.open.delete(key);
+  };
+  li.append(btn, more);
+  return li;
+};
+const titleCell = (main, sub, tag) => {
+  const t = el('span', 't'); const m = el('span');
+  if (tag) m.append(el('span', 'fx-tag', tag));
+  m.append(document.createTextNode(main)); t.append(m);
+  if (sub) t.append(el('small', '', sub));
+  return t;
+};
+const retirePrompt = (r) => 'Retire the scheduled loop "' + r.loop + '" (' + [r.project, r.runtime, r.job].filter(Boolean).join(', ') + '). '
+  + 'Ask me for the reason first, then show me what you will remove and wait for my yes. Stop and remove its schedule, delete its row in '
+  + (metaOf('Registry') || 'the loop registry') + ' and follow any retirement rules that file names. '
+  + 'Then run python3 ' + (metaOf('Builder') || 'fleet.py') + ' and confirm it is gone.';
+const loopActs = (r) => {
+  const acts = el('div', 'fx-acts');
+  if (r.runtime === 'mac' && !NOT_LOOP.includes(r.project) && r.status !== 'paused' && r.job) acts.append(copyBtn('launchctl kickstart gui/' + metaOf('uid') + '/' + r.job, 'Copy run-now command'));
+  if (r.project === 'Service' && r.status === 'failing') acts.append(copyBtn('launchctl bootout gui/' + metaOf('uid') + '/' + r.job, 'Copy stop command'));
+  acts.append(copyBtn(retirePrompt(r), 'Copy retire prompt'));
+  return acts.childElementCount ? acts : null;
+};
+const loopMore = (r) => (more) => {
+  if (r.detail) { const p = el('p'); p.append(el('b', '', 'Last result: '), document.createTextNode(r.detail)); more.append(p); }
+  more.append(el('p', '', [LABEL[r.status], r.schedule, r.job && r.job !== r.loop && r.job, r.checks && r.checks + ' checks passed',
+    r.cost != null ? '$' + r.cost.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' in 30 days' : /cloud|db|app/.test(r.runtime || '') ? 'cost not metered' : null].filter(Boolean).join(' · ')));
+  const acts = loopActs(r); if (acts) more.append(acts);
+};
+const loopRow = (r, key, grouped) => {
+  const right = el('span', 'r');
+  right.append(hist(r.history), el('span', '', r.last_run ? rel(r.last_run) : 'never'));
+  return expandRow(key + r.loop, [dot(TONE[r.status], LABEL[r.status]), titleCell(nameOf(r), [!grouped && r.project, nextText(r)].filter(Boolean).join(' · ')), right], loopMore(r));
+};
+const waitRow = (r, key) => {
+  const d = r.due ? dayDiff(r.due) : null;
+  const tone = d == null ? 'none' : d <= 0 ? 'bad' : d <= 2 ? 'warn' : 'none';
+  const right = el('span', 'r');
+  right.append(el('span', d == null ? '' : d <= 0 ? 'late' : d <= 2 ? 'soon' : '', r.due ? rel(r.due) : r.since ? 'since ' + dayMonth(r.since) : ''));
+  return expandRow(key + r.where + r.title, [dot(tone), titleCell(r.title, r.source, r.tag), right], (more) => {
+    if (r.item && r.item !== r.title) more.append(el('p', '', r.item));
+    if (r.action) { const p = el('p'); p.append(el('b', '', 'Your move: '), document.createTextNode(r.action)); more.append(p); }
+    const a = linkBtn(r.link, r.tag === 'PR review' ? 'Open PR' : 'Open'); if (a) { const acts = el('div', 'fx-acts'); acts.append(a); more.append(acts); }
+  }, tone === 'none' ? null : tone);
+};
+const failed = (box, what, status) => { box.append(el(box.tagName === 'UL' ? 'li' : 'div', 'fx-empty', status === 'error' ? 'The ' + what + ' failed to load.' : 'Loading…')); };
+const countOf = (s) => { const c = dash.data('counts'); const r = c.status === 'ok' && c.data.find((x) => x.status === s); return r ? r.n : null; };
+const metaOf = (label) => { const l = dash.data('loops'); const m = l.status === 'ok' && (l.meta || []).find((x) => x.label === label); return m ? m.value : null; };
+const go = (pane, filter) => {
+  if (filter) FX.filter = filter;
+  document.querySelectorAll('.fx-pane').forEach((p) => { p.hidden = p.id !== pane; });
+  document.querySelectorAll('.fx-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.pane === pane)));
+  dash.setLink(pane === 'overview' ? null : pane);
+  if (filter) { dash.draw('loop-filter'); dash.draw('loop-list'); dash.draw('loop-count'); }
+};
+const fxRoot = document.querySelector('.fx');
+[0, 1, 2, 4, 5].forEach((i) => fxRoot.style.setProperty('--fx-c' + i, dash.colors[i]));
+document.querySelectorAll('.fx-tab').forEach((t) => t.addEventListener('click', () => go(t.dataset.pane)));
+document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go, b.dataset.filter)));
+if (['loops', 'waiting'].includes(location.hash.slice(1))) go(location.hash.slice(1));
+
+/* header */
+dash.draw('synced', (e) => { const v = metaOf('Built'); e.textContent = v ? rel(v) : '—'; });
+dash.draw('window', (e) => { e.textContent = metaOf('Pass rate and cost window') || '—'; });
+dash.draw('refresh', (e) => { e.textContent = metaOf('Refresh') || 'Rebuilt by fleet.py'; });
+dash.draw('registry', (e) => { e.textContent = metaOf('Registry') || '—'; });
+dash.draw('badge-loops', (e) => { const n = countOf('attention'); e.textContent = n ? n : ''; });
+dash.draw('badge-waiting', (e) => { const n = countOf('waiting'); e.textContent = n ? n : ''; });
+
+/* overview */
+dash.draw('banner', (e) => {
+  const down = countOf('failing'), attn = countOf('attention'), soon = countOf('soon');
+  e.replaceChildren();
+  if (down == null) { e.textContent = '—'; return; }
+  e.dataset.tone = down ? 'bad' : attn ? 'warn' : 'ok';
+  const head = down ? down + (down === 1 ? ' loop is failing' : ' loops are failing') : attn ? 'All loops ran. ' + attn + (attn === 1 ? ' thing needs' : ' things need') + ' a look' : 'All loops are healthy';
+  const sub = soon ? soon + (soon === 1 ? ' item is' : ' items are') + ' due from you in the next two days' : 'Nothing from you is due in the next two days';
+  const text = el('div'); text.append(el('b', '', head), el('span', '', sub));
+  e.append(icon(down ? 'octagon' : attn ? 'alert' : 'check', 18), text);
+});
+const num = (name, s) => dash.draw(name, (e) => { const n = countOf(s); e.textContent = n == null ? '—' : n; });
+num('k-loops', 'loops'); num('k-wait', 'waiting');
+dash.draw('k-attn', (e) => { const n = countOf('attention'); e.textContent = n == null ? '—' : n; e.dataset.tone = !n ? '' : countOf('failing') ? 'bad' : 'warn'; });
+dash.draw('k-loops-sub', (e) => {
+  const loops = countOf('loops'), ok = countOf('healthy'), attn = countOf('attention'), down = countOf('failing');
+  e.replaceChildren();
+  if (!loops) return;
+  e.append(meter([[ok / loops, 'var(--color-ok)'], [(attn - down) / loops, 'var(--color-warn)'], [down / loops, 'var(--color-bad)']]), el('span', 's', ok + ' healthy'));
+});
+dash.draw('k-attn-sub', (e) => { const f = countOf('failing'); e.textContent = f == null ? '—' : f ? f + ' failing' : 'none failing'; });
+dash.draw('k-wait-sub', (e) => { const o = countOf('soon'); e.textContent = o == null ? '—' : o ? o + ' due within 2 days' : 'none due soon'; });
+dash.draw('k-cost', (e) => { const c = dash.data('cost'); e.textContent = c.status === 'ok' ? '$' + c.data.toLocaleString('en') : '—'; });
+
+dash.draw('attn-list', (box) => {
+  const l = dash.data('loops');
+  box.replaceChildren();
+  if (l.status !== 'ok') return failed(box, 'loop list', l.status);
+  const urgent = l.data.filter((r) => (!NOT_LOOP.includes(r.project) && URGENT.includes(r.status)) || (r.project === 'Service' && r.status === 'failing'))
+    .sort((a, b) => URGENT.indexOf(a.status) - URGENT.indexOf(b.status));
+  const gaps = l.data.filter((r) => !NOT_LOOP.includes(r.project) && GAPS.includes(r.status));
+  const ul = el('ul', 'fx-list');
+  if (!urgent.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', 'Nothing is failing, flaky or unregistered.')); ul.append(li); }
+  urgent.forEach((r) => {
+    const right = el('span', 'r'); right.append(hist(r.history), el('span', '', LABEL[r.status]));
+    ul.append(expandRow('a:' + r.loop, [dot(TONE[r.status], LABEL[r.status]), titleCell(nameOf(r), [r.project, reason(r)].filter(Boolean).join(' · ')), right], loopMore(r), TONE[r.status]));
+  });
+  box.append(ul);
+  if (gaps.length) {
+    const b = el('button', 'fx-foot'); b.type = 'button';
+    b.append(document.createTextNode(gaps.length + (gaps.length === 1 ? ' loop runs' : ' loops run') + ' with no outcome check'), icon('right', 14));
+    b.onclick = () => go('loops', 'unchecked');
+    box.append(b);
+  }
+});
+
+dash.draw('next-list', (ul) => {
+  const w = dash.data('waiting');
+  ul.replaceChildren();
+  if (w.status !== 'ok') return failed(ul, 'waiting list', w.status);
+  const next = w.data.filter((r) => r.due).slice(0, 5);
+  if (!next.length) { const li = el('li', 'fx-empty'); li.append(icon('check', 16), el('span', '', 'Nothing dated waits on you.')); ul.append(li); return; }
+  next.forEach((r) => ul.append(waitRow(r, 'n:')));
+});
+
+/* loops tab */
+dash.draw('loop-filter', (sel) => {
+  const l = dash.data('loops');
+  const projects = l.status === 'ok' ? [...new Set(l.data.filter((r) => !NOT_LOOP.includes(r.project) && r.project !== 'Unregistered').map((r) => r.project))].sort() : [];
+  sel.replaceChildren(new Option('All loops', 'all'), new Option('Needs a look', 'attention'), new Option('No outcome check', 'unchecked'),
+    ...projects.map((p) => new Option(p, 'p:' + p)));
+  sel.value = FX.filter;
+  sel.onchange = () => { FX.filter = sel.value; dash.draw('loop-list'); dash.draw('loop-count'); };
+});
+const loopFilter = (r) => FX.filter === 'all' ? true : FX.filter === 'attention' ? URGENT.includes(r.status)
+  : FX.filter === 'unchecked' ? GAPS.includes(r.status) : r.project === FX.filter.slice(2);
+/* one card per project, General for loops with none; the projects with the most to look at come first */
+dash.draw('loop-list', (box) => {
+  const l = dash.data('loops');
+  box.replaceChildren();
+  if (l.status !== 'ok') return failed(box, 'loop list', l.status);
+  const order = [...URGENT, ...GAPS, 'healthy', 'paused'];
+  const rows = l.data.filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r))
+    .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || nameOf(a).localeCompare(nameOf(b)));
+  if (!rows.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'No loops match.')); box.append(d); return; }
+  const groups = groupBy(rows, (r) => r.project || 'General');
+  const urgent = (rs) => rs.filter((r) => URGENT.includes(r.status)).length;
+  [...groups].sort(([a, ra], [b, rb]) => urgent(rb) - urgent(ra) || rb.length - ra.length || a.localeCompare(b)).forEach(([project, rs]) => {
+    const n = urgent(rs), wide = rs.length > 8;
+    const card = el('section', 'fx-card' + (wide ? ' fx-span' : ''));
+    card.dataset.sec = n ? (rs.some((r) => TONE[r.status] === 'bad') ? 'bad' : 'warn') : 'c0';
+    const head = el('h3', 'fx-group'), name = el('span', '', project);
+    name.append(el('small', '', rs.length + (rs.length === 1 ? ' loop' : ' loops')));
+    head.append(name, el('span', '', n ? n + ' need a look' : 'all fine'));
+    const ul = el('ul', 'fx-list' + (wide ? ' fx-two' : ''));
+    rs.forEach((r) => ul.append(loopRow(r, 'l:', true)));
+    card.append(head, ul); box.append(card);
+  });
+});
+dash.draw('loop-count', (e) => {
+  const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
+  const n = l.data.filter((r) => !NOT_LOOP.includes(r.project) && loopFilter(r)).length;
+  e.textContent = n + (n === 1 ? ' loop' : ' loops');
+});
+dash.draw('svc-list', (ul) => {
+  const l = dash.data('loops');
+  ul.replaceChildren();
+  if (l.status !== 'ok') return failed(ul, 'service list', l.status);
+  l.data.filter((r) => NOT_LOOP.includes(r.project)).forEach((r) => {
+    const right = el('span', 'r', r.status === 'one-off' ? rel(r.next_due) : LABEL[r.status]);
+    ul.append(expandRow('s:' + r.loop, [dot(r.status === 'failing' ? 'bad' : TONE[r.status], LABEL[r.status]), titleCell(r.loop, r.job), right], (more) => {
+      more.append(el('p', '', [r.schedule, r.detail].filter(Boolean).join('. ')));
+      const acts = loopActs(r); if (acts) more.append(acts);
+    }));
+  });
+});
+dash.draw('svc-count', (e) => {
+  const l = dash.data('loops'); if (l.status !== 'ok') { e.textContent = '—'; return; }
+  const s = l.data.filter((r) => NOT_LOOP.includes(r.project)), bad = s.filter((r) => r.status === 'failing').length;
+  e.textContent = s.length + (bad ? ', ' + bad + ' failing' : '');
+});
+
+/* waiting tab */
+dash.draw('wait-list', (box) => {
+  const w = dash.data('waiting');
+  box.replaceChildren();
+  if (w.status !== 'ok') return failed(box, 'waiting list', w.status);
+  if (!w.data.length) { const d = el('div', 'fx-card fx-empty'); d.append(icon('check', 16), el('span', '', 'Nothing waits on you.')); box.append(d); return; }
+  const groups = [['Due now', (r) => r.due && dayDiff(r.due) <= 0, 'bad'], ['This week', (r) => r.due && dayDiff(r.due) > 0 && dayDiff(r.due) <= 7, 'warn'],
+    ['Later', (r) => r.due && dayDiff(r.due) > 7, 'c0'], ['PRs to review', (r) => !r.due && r.tag === 'PR review', 'c1'], ['Open decisions, no date', (r) => !r.due && r.tag !== 'PR review', 'c4']];
+  groups.forEach(([name, test, sec]) => {
+    const rows = w.data.filter(test);
+    if (!rows.length) return;
+    const card = el('section', 'fx-card' + (rows.length > 8 ? ' fx-span' : '')); card.dataset.sec = sec; const head = el('h3', 'fx-group');
+    head.append(el('span', '', name), el('span', '', String(rows.length)));
+    const ul = el('ul', 'fx-list' + (rows.length > 8 ? ' fx-two' : '')); rows.forEach((r) => ul.append(waitRow(r, 'w:')));
+    card.append(head, ul); box.append(card);
+  });
+});
+</script>

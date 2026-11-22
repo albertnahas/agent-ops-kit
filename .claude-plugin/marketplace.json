@@ -1,0 +1,12 @@
+{
+  "name": "agent-ops-kit",
+  "description": "Claude Code plugin for running scheduled agent loops: plan them, watch them, retire them.",
+  "owner": { "name": "Albert Nahas", "url": "https://github.com/albertnahas" },
+  "plugins": [
+    {
+      "name": "agent-ops-kit",
+      "source": "./",
+      "description": "Plan the loops a project needs and see every loop on one dashboard."
+    }
+  ]
+}
