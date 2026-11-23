@@ -23,23 +23,23 @@ git clone -q "$s/origin.git" "$s/app" 2>/dev/null && cd "$s/app" && git checkout
 git commit -q --allow-empty -m init && git push -q origin HEAD
 land() { git add -A && git commit -qm "$1" && git push -q origin HEAD; }
 scaffold() { "$kit/bin/new-loop" --repo "$s/app" --mission "Keep issues triaged and p95 < 200ms; never close one a person opened without a reply (> 0)." \
-  --limits "At most 20 comments a day." --outcome "Every new issue gets a label within a day." --source "origin's commit history" \
+  --limits "At most 20 comments a day." --source "origin's commit history" \
   --schedule "0 2 * * *" --x-surface "the billing folder" "$@"; }
 
 out=$(scaffold --name triage --runtime launchd --floor "at least 1 commit" --measure "git rev-list --count origin/trunk" --project App 2>&1)
 expect "new-loop scaffolds a launchd loop from the kit's template" "[ \$? = 0 ] || { echo \"\$out\"; false; }"
 c=docs/loops/triage.md
 expect "the charter carries the user's words in its mission blocks" "grep -qF 'Keep issues triaged and p95 < 200ms; never close one a person opened without a reply (> 0).' $c && grep -q '^At most 20 comments a day.' $c && grep -q '^- the billing folder' $c"
-expect "the Good block is filled and the Floor is the user's" "grep -q '^## Good' $c && grep -q '^- \*\*Floor:\*\* at least 1 commit$' $c && grep -q 'checks/triage.py' $c"
+expect "the Mission holds the user's Floor and Source, and no Good block" "! grep -q '^## Good' $c && grep -q '^- \*\*Floor:\*\* at least 1 commit$' $c && grep -q \"^- \\*\\*Source:\\*\\* origin's commit history$\" $c && sed -n '/^## Mission/,/<!-- \/mission -->/p' $c | grep -q '^- \*\*Floor:'"
 expect "the kill switch names the launchd job" "grep -q 'launchctl bootout gui/\$(id -u)/com.agent-ops.triage' $c"
 expect "reports go to the loop's own folder" "grep -q 'docs/ops-reports/triage/' $c && ! grep -q 'docs/ops-reports/YYYY' $c"
 expect "the Orders file names the loop, keeps no example Orders and logs one line" "grep -q '^# Orders: triage' docs/orders/triage.md && ! grep -q wedding docs/orders/triage.md && [ \$(grep -c '| new-loop |\| from new-loop |' docs/orders/triage.md) = 1 ]"
-expect "the charter links its Orders, whose Target starts at the Floor" "grep -q 'docs/orders/triage.md' $c && grep -q '^Target: at least 1 commit ' docs/orders/triage.md"
+expect "the charter links its Orders, which carry no Target" "grep -q 'docs/orders/triage.md' $c && ! grep -q '^Target:' docs/orders/triage.md"
 expect "the runner exports OPS_LOOP with cost caps" "grep -q '^export OPS_LOOP=triage' $AGENT_OPS_DIR/runners/triage.sh && grep -q 'max-budget-usd 5' $AGENT_OPS_DIR/runners/triage.sh && grep -q 'max-turns 60' $AGENT_OPS_DIR/runners/triage.sh"
 expect "the plist runs the runner at 02:00 and isn't installed" "python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],\"rb\")); assert p[\"StartCalendarInterval\"]=={\"Hour\":2,\"Minute\":0} and p[\"ProgramArguments\"]==[sys.argv[2]]' $AGENT_OPS_DIR/schedules/com.agent-ops.triage.plist $AGENT_OPS_DIR/runners/triage.sh && [ ! -e $HOME/Library/LaunchAgents ]"
 expect "the registry gets one row with its check and reader" "grep -q '^| triage | App | mac | com.agent-ops.triage | 0 2 \* \* \* | \`docs/loops/triage.md\` | .*checks/triage.py.* | you |' $AGENT_OPS_DIR/REGISTRY.md"
 expect "the repo gets the grader, the hooks and the guard it relies on" "[ -x scripts/mission-guard ] && [ -x bin/claude-run ] && [ -f .claude/agents/pr-grader.md ] && [ -f .claude/settings.json ]"
-expect "a repo's own settings are kept, with a note to wire the guard" "d=\$(mktemp -d) && git init -q \$d && mkdir \$d/.claude && echo '{}' > \$d/.claude/settings.json && \"\$kit/bin/new-loop\" --repo \$d --name other --mission m --limits l --outcome o --source s --schedule '0 2 * * *' --runtime cron --floor 'unmeasured: x' | grep -q 'merge the kit.s PreToolUse guard hook' && [ \"\$(cat \$d/.claude/settings.json)\" = '{}' ]"
+expect "a repo's own settings are kept, with a note to wire the guard" "d=\$(mktemp -d) && git init -q \$d && mkdir \$d/.claude && echo '{}' > \$d/.claude/settings.json && \"\$kit/bin/new-loop\" --repo \$d --name other --mission m --limits l --source s --schedule '0 2 * * *' --runtime cron --floor 'unmeasured: x' | grep -q 'merge the kit.s PreToolUse guard hook' && [ \"\$(cat \$d/.claude/settings.json)\" = '{}' ]"
 expect "new-loop won't overwrite a loop" "! scaffold --name triage --runtime launchd --floor 'unmeasured: x' >/dev/null 2>&1"
 
 land "triage loop"
@@ -61,7 +61,7 @@ expect "ops-check passes the loop's own check once its report is on a branch" "O
 "$AGENT_OPS_DIR/runners/triage.sh"
 expect "the runner logs Claude's run and the check under the loop's name" "grep -q '\"loop\":\"triage\".*\"subtype\":\"success\".*\"cost\":0.42' $AGENT_OPS_DIR/runs.jsonl && tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"triage\",.*\"check\":\"pass\"'"
 
-out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --checked-by triage --budget 2.5 --turns 20 --outcome "merged PRs | week" --project "A|B" 2>&1)
+out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --checked-by triage --budget 2.5 --turns 20 --mission "merged PRs | week" --project "A|B" 2>&1)
 expect "new-loop scaffolds a cron loop next to the first" "[ \$? = 0 ] && grep -q '^30 6 \* \* 1-5 PATH=.* AGENT_OPS_DIR=.*runners/growth.sh' $AGENT_OPS_DIR/schedules/growth.cron"
 expect "a | in an answer is escaped in the KPI table and the registry" "grep -qF '| merged PRs \\| week | at least 1000 commits |' docs/loops/growth.md && grep -qF '| growth | A\\|B | cron |' $AGENT_OPS_DIR/REGISTRY.md"
 report growth && land growth
@@ -90,7 +90,7 @@ git init -q "$s/My Shop (v2)" && (cd "$s/My Shop (v2)" && "$kit/bin/new-loop" --
 Never promise a refund." --source "the support inbox" --floor "unmeasured: no inbox access yet" --runtime cloud --schedule "0 8 * * *" --project Shop >/dev/null)
 sc="$s/My Shop (v2)/docs/loops/my-shop-v2.md"
 expect "the essentials alone scaffold a loop, named after its repo, with the spec's default limits" "grep -qF \"\$(jq -r '.defaults[] | select(.id == \"limits\") | .default' $kit/skills/new-loop/questions.json)\" \"\$sc\" && grep -q '^| my-shop-v2 | Shop | cloud | routine:my-shop-v2 |' $AGENT_OPS_DIR/REGISTRY.md"
-expect "a two-line mission makes a one-line Outcome and KPI row" "grep -qx -- '- \*\*Outcome:\*\* Answer every support email within a day. Never promise a refund.' \"\$sc\" && grep -qx '| Answer every support email within a day. Never promise a refund. | unmeasured: no inbox access yet | below the Floor |' \"\$sc\""
+expect "a two-line mission makes a one-line KPI row" "grep -qx '| Answer every support email within a day. Never promise a refund. | unmeasured: no inbox access yet | below the Floor |' \"\$sc\""
 git init -q "$s/Über Café" && (cd "$s/Über Café" && mkdir -p sub && cd sub && "$kit/bin/new-loop" --mission m --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' >/dev/null)
 expect "accented folder names become plain letters, found from a subfolder" "[ -f '$s/Über Café/docs/loops/uber-cafe.md' ]"
 blank=$("$kit/bin/new-loop" --mission '  ' --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' 2>&1)
