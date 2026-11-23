@@ -2,7 +2,7 @@
 
 The setup I use to run a live product on a night shift of Claude Code agents while I work my day job. They answer support tickets, fix the bugs behind them, open PRs, grade them and merge them. I see only what a revert can't undo.
 
-On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 277 PRs have merged since July 2026 (as of 21 Nov). The loops opened 170 of them, 77 of which are daily reports. The rest came from Claude Code sessions I directed and a few dependency bots. No loop PR has been reverted. The one revert on main since July undid a pricing change I pushed myself.
+On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 286 PRs have merged since July 2026 (as of 22 Nov). The loops opened 172 of them, 78 of which are daily reports. The rest came from Claude Code sessions I directed and a few dependency bots. No loop PR has been reverted. The one revert on main since July undid a pricing change I pushed myself.
 
 Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/agent-ops-factory) builds on this kit with a playbook, a loop planner and one dashboard for every loop.
 
