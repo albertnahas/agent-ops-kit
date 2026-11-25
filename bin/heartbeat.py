@@ -12,6 +12,7 @@ when the notifier failed. If $AGENT_OPS_DIR is itself a git repo with a remote, 
 runs.jsonl, COSTS.md and what hooks name, nothing else, and pushes (runs.jsonl merges as a union, so two writers
 never conflict), so a second watchman in the cloud can check that line is fresh
 (examples/heartbeat-watch-prompt.md); a failed sync logs a fail line and leaves local edits as they were.
+The sync holds .git/ops-git.lock (flock), waiting up to 3 minutes for whoever has it.
 A ledger line that isn't a run (no loop name, a date that isn't one or is in the future, bytes that aren't
 UTF-8) is skipped with an alert, never a crash.
 
@@ -20,7 +21,7 @@ Hooks: each executable in $AGENT_OPS_DIR/heartbeat.d runs in name order after th
 from here on (so a hook can add, replace or drop them) and any files it wrote that the sync should commit. A hook
 that fails or prints anything else leaves the alerts as they were and adds one of its own. The notifier also gets
 the due alerts as JSON on stdin, so a router can send each to its own place by key."""
-import datetime as dt, json, os, re, shlex, subprocess
+import datetime as dt, fcntl, json, os, re, shlex, subprocess, time
 from pathlib import Path
 
 OPS = Path(os.environ.get("AGENT_OPS_DIR", Path.home() / ".agent-ops"))
@@ -140,6 +141,10 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
     if "runs.jsonl merge=union" not in (attrs.read_text() if attrs.exists() else ""):
         attrs.parent.mkdir(exist_ok=True)
         with attrs.open("a") as f: f.write("runs.jsonl merge=union\n")
+    lock = (OPS / git("rev-parse", "--git-path", "ops-git.lock").stdout.strip()).open("a")  # the lock any other script syncing this repo takes
+    for _ in range(180):
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB); break
+        except BlockingIOError: time.sleep(1)
     git("add", "--", *[c for c in commit if (OPS / c).exists()])  # a missing path would stage nothing
     git("commit", "-qm", f"heartbeat {now:%F}")  # only these: other edits stay local
     head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
