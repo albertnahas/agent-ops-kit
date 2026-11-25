@@ -6,6 +6,66 @@ On [OpenWhen](https://www.openwhen.cards), a product I built and run alone, 286 
 
 Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/agent-ops-factory) builds on this kit with a playbook, a loop planner and one dashboard for every loop.
 
+## Your first loop in 15 minutes
+
+One real loop, start to finish, on a Mac. The example is `readme-links`: each morning it checks the links in your repo's README and writes a report. It needs no API key or service beyond the Claude Code and `gh` logins you already have. On Linux, pass `--runtime cron`, then use the schedule command new-loop prints and the hard stop in the charter's Kill switch instead of the launchd ones. The paths below assume `AGENT_OPS_DIR` is unset, so it's `~/.agent-ops`.
+
+1. **Prerequisites.** The tools listed under [Start a loop](#start-a-loop), plus `git` and a repo of yours with a README and an `origin` you can push to.
+2. **Clone the kit**, then run its tests as in [By hand](#by-hand):
+
+   ```bash
+   git clone https://github.com/albertnahas/agent-ops-kit && cd agent-ops-kit && KIT=$PWD
+   ```
+
+3. **Scaffold the loop** from your repo. Budget and turns default to $5 and 60 a run, and the hard limits to the default in `skills/new-loop/questions.json`:
+
+   ```bash
+   cd /path/to/your-repo
+   "$KIT/bin/new-loop" --name readme-links --runtime launchd --schedule '0 9 * * *' \
+     --mission 'Keep every link in README.md working. Never change anything but README.md.' \
+     --source 'the links in README.md on the default branch' \
+     --floor 'unmeasured: no broken-link count yet'
+   ```
+
+4. **What it wrote.** It won't overwrite any of these, and it prints its next steps:
+   - `docs/loops/readme-links.md`: the charter, the agent's only instructions, with your words in its mission blocks.
+   - `docs/orders/readme-links.md`: its Orders, empty for now, which change only by an Orders PR.
+   - `~/.agent-ops/checks/readme-links.py`: the outcome check, plain Python with no model.
+   - `~/.agent-ops/runners/readme-links.sh`: the runner. It checks the charter's `status:` line, runs Claude with the caps, then the check.
+   - `~/.agent-ops/schedules/com.agent-ops.readme-links.plist`: the launchd schedule. It isn't installed yet.
+   - A row in `~/.agent-ops/REGISTRY.md`, and copies of the grader, hooks, `bin/claude-run`, `bin/ops-check`, `scripts/mission-guard` and `docs/DECISIONS.md` if your repo lacks them.
+5. **The outcome check.** new-loop fills it from your Floor. With an unmeasured Floor it checks one thing: `docs/ops-reports/readme-links/<today>.md` is on a branch of origin with every report section. A measured Floor also takes `--measure` (see [the skill's step 2](skills/new-loop/SKILL.md#2-write-the-check-before-anything-else)). Dry run it:
+
+   ```bash
+   python3 ~/.agent-ops/checks/readme-links.py
+   ```
+
+   Before the first run it should fail with `no docs/ops-reports/readme-links/<today>.md on any branch of origin`. Anything else, like `can't fetch origin`, gets fixed now.
+6. **Land and bless.** Merge the repo files it listed through a PR. If the repo has no grade labels yet, create them as in [By hand](#by-hand). Then `git pull` and run the `scripts/mission-guard bless ...` line it printed, yourself.
+7. **Run it once by hand**, which runs Claude through `bin/claude-run` and the check through `bin/ops-check`:
+
+   ```bash
+   ~/.agent-ops/runners/readme-links.sh
+   cat ~/.agent-ops/logs/readme-links.log
+   tail -2 ~/.agent-ops/runs.jsonl
+   ```
+
+   The first ledger line is the run, with its `exit`, `turns` and `cost`. The second is the ops-check line, `{"loop":"readme-links","date":"...","check":"pass","detail":"..."}`. That `check` is the verdict, not Claude's exit code. On a `fail`, `detail` says why.
+8. **The heartbeat.** Run `"$KIT/bin/heartbeat.py"`. It reads the ledger and alerts on a failed check, a silent loop or a run over 3x its usual cost. With `AGENT_OPS_NOTIFY` unset it prints the alerts. Schedule it every morning with the heartbeat line in [examples/crontab](examples/crontab).
+9. **Install the schedule** with the command new-loop printed. With the default paths it's:
+
+   ```bash
+   cp ~/.agent-ops/schedules/com.agent-ops.readme-links.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-ops.readme-links.plist
+   ```
+
+10. **Stop it.** To pause, set `status: paused` on the charter's status line and push to main, as its Kill switch says. The runner reads that line in your checkout before Claude starts. To stop it for good, run the hard stop from the charter's Kill switch:
+
+    ```bash
+    launchctl bootout gui/$(id -u)/com.agent-ops.readme-links; rm ~/Library/LaunchAgents/com.agent-ops.readme-links.plist
+    ```
+
+Then read every report and grade for the first week, as [Start a loop](#start-a-loop) says.
+
 ## What's inside
 
 **The night shift**
