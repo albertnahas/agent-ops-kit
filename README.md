@@ -11,10 +11,11 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 One real loop, start to finish, on a Mac. The example is `readme-links`: each morning it checks the links in your repo's README and writes a report. It needs no API key or service beyond the Claude Code and `gh` logins you already have. On Linux, pass `--runtime cron`, then use the schedule command new-loop prints and the hard stop in the charter's Kill switch instead of the launchd ones. The paths below assume `AGENT_OPS_DIR` is unset, so it's `~/.agent-ops`.
 
 1. **Prerequisites.** The tools listed under [Start a loop](#start-a-loop), plus `git` and a GitHub repo of yours with a README, and `gh auth login` done: the loop opens PRs, grades them and labels them with `gh`. Another host works for the reports, but nothing gets graded or merged there.
-2. **Clone the kit**, then run its tests as in [By hand](#by-hand):
+2. **Clone the kit** and run its tests:
 
    ```bash
    git clone https://github.com/albertnahas/agent-ops-kit && cd agent-ops-kit && KIT=$PWD
+   tests/hooks.test.sh && tests/ops.test.sh && tests/new-loop.test.sh
    ```
 
 3. **Scaffold the loop** from your repo. Start the caps low: this loop costs well under $1 a run, and you raise them from the hand run's cost (they default to $5 and 60 turns). The hard limits default to the ones in `skills/new-loop/questions.json`:
@@ -33,7 +34,7 @@ One real loop, start to finish, on a Mac. The example is `readme-links`: each mo
    - `~/.agent-ops/checks/readme-links.py`: the outcome check, plain Python with no model.
    - `~/.agent-ops/runners/readme-links.sh`: the runner. It checks the charter's `status:` line, runs Claude with the caps, then the check.
    - `~/.agent-ops/schedules/com.agent-ops.readme-links.plist`: the launchd schedule. It isn't installed yet.
-   - A row in `~/.agent-ops/REGISTRY.md`, and copies of the grader, hooks, `bin/claude-run`, `bin/ops-check`, `scripts/mission-guard` and `docs/DECISIONS.md` if your repo lacks them.
+   - A row in `~/.agent-ops/REGISTRY.md`, and copies of the grader, hooks, `bin/claude-run`, `bin/ops-check`, `scripts/mission-guard`, `.claude/settings.json` and `docs/DECISIONS.md` if your repo lacks them.
 5. **The outcome check.** new-loop fills it from your Floor. With an unmeasured Floor it checks one thing: `docs/ops-reports/readme-links/<today>.md` is on a branch of origin with every report section. A measured Floor also takes `--measure` (see [the skill's step 2](skills/new-loop/SKILL.md#2-write-the-check-before-anything-else)). Dry run it:
 
    ```bash
@@ -41,7 +42,7 @@ One real loop, start to finish, on a Mac. The example is `readme-links`: each mo
    ```
 
    Before the first run it should fail with `no docs/ops-reports/readme-links/<today>.md on any branch of origin`. Anything else, like `can't fetch origin`, gets fixed now.
-6. **Land and bless.** Merge the repo files it listed through a PR. If the repo has no grade labels yet, create them as in [By hand](#by-hand). Then `git pull` and run the `scripts/mission-guard bless ...` line it printed, yourself.
+6. **Land and bless.** Merge the repo files it listed through a PR. If the repo has no grade labels yet, create them as in [By hand](#by-hand). Then `git pull` and run the `scripts/mission-guard bless ...` line it printed, yourself. Bless reads the charter from origin's default branch, so it fails until the merge lands.
 7. **Run it once by hand**, which runs Claude through `bin/claude-run` and the check through `bin/ops-check`:
 
    ```bash
