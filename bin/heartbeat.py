@@ -111,7 +111,7 @@ failed = lambda r: r.get("check") == "fail" or ("check" not in r and crashed(r))
 rows = ["| loop | runs 7d | failed 7d | denied calls 7d | cost 7d | cost 30d | last run |", "|---|---|---|---|---|---|---|"]
 for loop, rs in sorted(by_loop.items(), key=lambda kv: -cost(kv[1], 30)):
     week = [r for r in rs if r["at"] >= since(7)]
-    rows.append(f"| {loop} | {len(week)} | {sum(map(failed, week))} | {sum(r.get('denials') or 0 for r in week)} | ${cost(rs, 7):.2f} | ${cost(rs, 30):.2f} | {rs[-1]['at']:%Y-%m-%dT%H:%M} |")
+    rows.append(f"| {loop} | {sum('check' not in r for r in week)} | {sum(map(failed, week))} | {sum(r.get('denials') or 0 for r in week)} | ${cost(rs, 7):.2f} | ${cost(rs, 30):.2f} | {rs[-1]['at']:%Y-%m-%dT%H:%M} |")
 OPS.mkdir(parents=True, exist_ok=True)
 (OPS / "COSTS.md").write_text(f"# Loop runs and cost\n\nUpdated {now:%Y-%m-%d %H:%M} by heartbeat.py. Cost is Claude's API-equivalent estimate; paid APIs a loop calls are not in it.\n\n" + "\n".join(rows) + "\n")
 

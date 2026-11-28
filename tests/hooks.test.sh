@@ -17,7 +17,7 @@ check() { # hook, expected (block|allow), command
     echo "$input" | bash -c "$GRADER" >/dev/null 2>&1; code=$?
   fi
   out=$([ $code -eq 2 ] && echo block || echo allow)
-  if [ "$out" = "$2" ]; then echo "ok    $1 $2: $3"; else echo "FAIL  $1 expected $2: $3"; fail=1; fi
+  if [ "$out" = "$2" ]; then echo "ok    $1 $2: ${3//$'\n'/\\n}"; else echo "FAIL  $1 expected $2: ${3//$'\n'/\\n}"; fail=1; fi
 }
 
 check guard block "git push origin main"
