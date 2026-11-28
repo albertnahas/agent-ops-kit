@@ -81,7 +81,7 @@ A charter or an Orders file changes only through a PR, never by a direct push, h
 2. Read your Orders, if you have any, and the last 3 reports in `docs/ops-reports/`. The reports are your memory.
 
 <!-- mission -->
-3. **PR sweep, before new work.** For every open PR, whatever its author: rebase on main keeping both sides of a conflict, run the default branch's copy of the mission guard on its head with `git show origin/main:scripts/mission-guard > /tmp/mission-guard && python3 /tmp/mission-guard pr`, naming your default branch in place of `main`. Any non-zero exit makes it X, whatever the grade. On a PR that changes `docs/orders/`, run the same copy with `orders` too. Then grade it with `pr-grader`, act on the grade. Merging deploys, so merge one at a time and rebase the next on the result. Only X stays open; an X open more than 14 days leads the report.
+3. **PR sweep, before new work.** First copy the default branch's mission guard with `git show origin/main:scripts/mission-guard > /tmp/mission-guard`, naming your default branch in place of `main`. Then for every open PR, whatever its author: run `python3 /tmp/mission-guard author <n>` before anything reads the PR or runs its code; a non-zero exit makes it X without grading. Otherwise rebase on main keeping both sides of a conflict and run `python3 /tmp/mission-guard pr` on its head. Any non-zero exit makes it X, whatever the grade. On a PR that changes `docs/orders/`, run the same copy with `orders` too. Then grade it with `pr-grader`, act on the grade. Merging deploys, so merge one at a time and rebase the next on the result. Only X stays open; an X open more than 14 days leads the report.
 <!-- /mission -->
 
 4. Pull today's data. Rank findings by the KPI table.

@@ -6,6 +6,7 @@ mission-guard bless <file>...  record each charter's marked blocks as they are o
 mission-guard check            alert when a recorded charter's blocks changed on the default branch since its bless
 mission-guard pr               run in a PR checkout: exit 1 if it changes mission blocks or a protected path, 2 if it can't tell
 mission-guard orders           run in an Orders PR checkout: exit 1 unless it only edits docs/orders/ files, one Changes line each
+mission-guard author <n>       exit 1 unless PR n's author can push to this repo, 2 if it can't tell: run it before anything reads the PR
 
 State lives in $AGENT_OPS_DIR/missions.json (default ~/.agent-ops). Push your own edit, then bless it.
 The heartbeat runs check. The loop that grades PRs runs pr on each head (it needs no state, so a copy of
@@ -174,9 +175,27 @@ def orders():
     return 1 if bad or not changed else 0
 
 
+def author(n):
+    """Model-free gate run before any grading: PR n's author must have write, maintain or admin access to this
+    repo. A stranger's PR, a bot's included, is X before a model reads it or its code runs."""
+    gh = lambda *a: subprocess.run(["gh", *a], capture_output=True, text=True, env=ENV, timeout=60)
+    try:
+        login = gh("pr", "view", n, "--json", "author", "-q", ".author.login").stdout.strip()
+        perm = gh("api", f"repos/{{owner}}/{{repo}}/collaborators/{login}/permission", "-q", ".permission").stdout.strip() if login else ""
+    except subprocess.TimeoutExpired:
+        perm = ""
+    if not perm:
+        print(f"#{n}: can't read its author's access, treat the PR as X")
+        return 2
+    ok = perm in ("admin", "maintain", "write")
+    print(f"#{n} by {login}: {perm} access. " + ("Grade it." if ok else "Not a collaborator who can push. Grade X."))
+    return 0 if ok else 1
+
 cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
 if cmd == "bless" and args:
     sys.exit(bless(args))
 if cmd in ("check", "pr", "orders") and not args:
     sys.exit({"check": check, "pr": pr, "orders": orders}[cmd]())
-sys.exit("usage: mission-guard bless <file>... | mission-guard check | mission-guard pr | mission-guard orders")
+if cmd == "author" and len(args) == 1 and args[0].isdigit():
+    sys.exit(author(args[0]))
+sys.exit("usage: mission-guard bless <file>... | mission-guard check | mission-guard pr | mission-guard orders | mission-guard author <n>")
