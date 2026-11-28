@@ -6,7 +6,8 @@ AGENT_OPS_DIR=/path/to/agent-ops
 # Any command that takes a subject and a body: a mail script, a Telegram bot, ntfy.
 AGENT_OPS_NOTIFY=/path/to/notify.sh
 
-# The agent loop, every night at 02:00 local time.
-0 2 * * * /path/to/your-repo/scripts/run.sh
-# The heartbeat, every morning at 08:00.
-0 8 * * * /path/to/your-repo/bin/heartbeat.py
+# The agent loop, every night at 02:00 local time: the runner new-loop wrote (with --runtime cron it prints this line),
+# or scripts/run.sh if you set it up by hand.
+0 2 * * * /path/to/agent-ops/runners/<loop>.sh
+# The heartbeat, every morning at 08:00. It runs from the kit clone: one heartbeat watches every loop.
+0 8 * * * /path/to/agent-ops-kit/bin/heartbeat.py

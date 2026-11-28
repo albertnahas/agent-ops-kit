@@ -10,21 +10,21 @@ Running more than one loop? [agent-ops-factory](https://github.com/albertnahas/a
 
 One real loop, start to finish, on a Mac. The example is `readme-links`: each morning it checks the links in your repo's README and writes a report. It needs no API key or service beyond the Claude Code and `gh` logins you already have. On Linux, pass `--runtime cron`, then use the schedule command new-loop prints and the hard stop in the charter's Kill switch instead of the launchd ones. The paths below assume `AGENT_OPS_DIR` is unset, so it's `~/.agent-ops`.
 
-1. **Prerequisites.** The tools listed under [Start a loop](#start-a-loop), plus `git` and a repo of yours with a README and an `origin` you can push to.
+1. **Prerequisites.** The tools listed under [Start a loop](#start-a-loop), plus `git` and a GitHub repo of yours with a README, and `gh auth login` done: the loop opens PRs, grades them and labels them with `gh`. Another host works for the reports, but nothing gets graded or merged there.
 2. **Clone the kit**, then run its tests as in [By hand](#by-hand):
 
    ```bash
    git clone https://github.com/albertnahas/agent-ops-kit && cd agent-ops-kit && KIT=$PWD
    ```
 
-3. **Scaffold the loop** from your repo. Budget and turns default to $5 and 60 a run, and the hard limits to the default in `skills/new-loop/questions.json`:
+3. **Scaffold the loop** from your repo. Start the caps low: this loop costs well under $1 a run, and you raise them from the hand run's cost (they default to $5 and 60 turns). The hard limits default to the ones in `skills/new-loop/questions.json`:
 
    ```bash
    cd /path/to/your-repo
    "$KIT/bin/new-loop" --name readme-links --runtime launchd --schedule '0 9 * * *' \
      --mission 'Keep every link in README.md working. Never change anything but README.md.' \
      --source 'the links in README.md on the default branch' \
-     --floor 'unmeasured: no broken-link count yet'
+     --floor 'unmeasured: no broken-link count yet' --budget 1 --turns 15
    ```
 
 4. **What it wrote.** It won't overwrite any of these, and it prints its next steps:
@@ -51,7 +51,7 @@ One real loop, start to finish, on a Mac. The example is `readme-links`: each mo
    ```
 
    The first ledger line is the run, with its `exit`, `turns` and `cost`. The second is the ops-check line, `{"loop":"readme-links","date":"...","check":"pass","detail":"..."}`. That `check` is the verdict, not Claude's exit code. On a `fail`, `detail` says why.
-8. **The heartbeat.** Run `"$KIT/bin/heartbeat.py"`. It reads the ledger and alerts on a failed check, a silent loop or a run over 3x its usual cost. With `AGENT_OPS_NOTIFY` unset it prints the alerts. Schedule it every morning with the heartbeat line in [examples/crontab](examples/crontab).
+8. **The heartbeat.** Run `"$KIT/bin/heartbeat.py"`. It reads the ledger and alerts on a failed check, a silent loop or a run over 3x its usual cost. With `AGENT_OPS_NOTIFY` unset it prints the alerts. It runs from the kit, not your repo, because it watches every loop. Schedule it every morning with the heartbeat line in [examples/crontab](examples/crontab), which works on a Mac too.
 9. **Install the schedule** with the command new-loop printed. With the default paths it's:
 
    ```bash
@@ -117,7 +117,7 @@ tests/hooks.test.sh && tests/ops.test.sh && tests/new-loop.test.sh
 Every line should say `ok`, or `skip` for the factory check when you don't have the factory. Then run `bin/new-loop --help` and follow what it prints, or copy the pieces yourself:
 
 ```bash
-cp -R .claude bin checks docs scripts tests /path/to/your-repo/
+cp -R .claude bin checks docs scripts tests /path/to/your-repo/ && mv /path/to/your-repo/bin/mission-guard /path/to/your-repo/scripts/
 ```
 
 ```bash

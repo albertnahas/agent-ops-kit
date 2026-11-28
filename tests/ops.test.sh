@@ -48,6 +48,7 @@ expect "heartbeat flags the costly run" "jq -e '.alerts | any(startswith(\"cost:
 expect "heartbeat leaves the healthy loop alone" "! jq -e '.alerts | any(contains(\"good\"))' <<<'$out' >/dev/null"
 expect "heartbeat flags malformed ledger lines and keeps going" "jq -e '[.alerts[] | select(startswith(\"ledger:\"))] | length == 2' <<<'$out' >/dev/null"
 expect "heartbeat writes COSTS.md" "grep -q '| pricey | 7 | 0 | 0 | \\\$15.00' $AGENT_OPS_DIR/COSTS.md"
+expect "a run and its check line are one run in COSTS.md" "grep -q '^| fine | 1 |' $AGENT_OPS_DIR/COSTS.md"
 expect "heartbeat logs its own pass line" "tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\": \"heartbeat\"'"
 expect "an alert is sent once, then held for 3 days" "[ \"\$(bin/heartbeat.py | tail -1 | jq -c .sent)\" = '[]' ]"
 h=$(mktemp -d); echo "{\"loop\":\"x\",\"date\":\"$(day 1)\",\"check\":\"fail\"}" > "$h/runs.jsonl"; AGENT_OPS_DIR=$h bin/heartbeat.py >/dev/null
