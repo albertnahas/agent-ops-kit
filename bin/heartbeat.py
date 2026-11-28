@@ -5,6 +5,7 @@ Reads $AGENT_OPS_DIR/runs.jsonl (written by claude-run and ops-check) and alerts
 - failed its last outcome check (or, with no check, its last Claude run crashed: not success, a non-zero exit, or is_error)
 - went silent: no run for twice its usual gap
 - cost over 3x its median on the last run
+Runs logged as adhoc (claude-run or ops-check with no loop name) are no loop: they count in COSTS.md and never alert.
 Also runs bin/mission-guard check and alerts when a blessed charter's marked blocks drifted.
 Writes COSTS.md, sends each alert at most every 3 days through $AGENT_OPS_NOTIFY (a command
 called with a subject and a body; unset, it prints them), then logs its own line: pass, or fail
@@ -60,6 +61,7 @@ median = lambda xs: sorted(xs)[len(xs) // 2]
 crashed = lambda r: r.get("subtype") != "success" or bool(r.get("exit") or r.get("is_error"))  # a crash can still say success
 
 for loop, rs in by_loop.items():
+    if loop == "adhoc": continue
     checks = [r for r in rs if "check" in r]
     claude = [r for r in rs if "check" not in r]
     if checks and checks[-1]["check"] != "pass":

@@ -60,8 +60,8 @@ def args():
     ascii_name = unicodedata.normalize("NFKD", a.repo.name).encode("ascii", "ignore").decode().lower()
     a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", ascii_name).strip("-.")
     a.checked_by = a.checked_by or a.supervisor or "you"
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody"):
-        p.error("--name is letters, digits, _ . and -, and not you or nobody; pass one when the repo's folder name gives none")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody", "adhoc"):
+        p.error("--name is letters, digits, _ . and -, and not you, nobody or adhoc; pass one when the repo's folder name gives none")
     if not a.reschedule and re.match(LEVEL, a.floor, re.I) and not a.measure:
         p.error("a measured --floor needs --measure, the command that reads it from --source")
     if not a.reschedule and not re.match(LEVEL, a.floor, re.I) and not a.floor.startswith("unmeasured: "):
