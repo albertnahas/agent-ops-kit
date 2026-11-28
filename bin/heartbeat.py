@@ -149,7 +149,8 @@ if git("rev-parse", "--show-toplevel").stdout.strip() == str(OPS.resolve()) and 
         except BlockingIOError: time.sleep(1)
     git("add", "--", *[c for c in commit if (OPS / c).exists()])  # a missing path would stage nothing
     git("commit", "-qm", f"heartbeat {now:%F}")  # only these: other edits stay local
-    head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash")
+    up = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").stdout.strip().partition("/")  # named, so a fetch running beside this one can't leave two branches to rebase onto
+    head, sync = git("rev-parse", "HEAD").stdout.strip(), git("pull", "-q", "--rebase", "--autostash", *(up[::2] if up[2] else ()))
     clash = not sync.returncode and git("ls-files", "-u").stdout  # the pull went through, but local edits clash with it
     if clash: git("reset", "-q", "--hard", head); git("stash", "pop", "-q")  # so put the tree back as it was
     elif sync.returncode: git("rebase", "--abort")
