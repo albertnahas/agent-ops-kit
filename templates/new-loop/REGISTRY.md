@@ -4,7 +4,7 @@ Every scheduled loop you run, one row each, added in the same change that schedu
 
 ## Registry
 
-| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Checked by | Supervisor | Escalates to | Role |
+| Loop | Project | Runtime | Job | Schedule | Charter | Outcome check | Read by | Supervisor | Escalates to | Role |
 |---|---|---|---|---|---|---|---|---|---|---|
 
 ## Services
