@@ -61,14 +61,14 @@ expect "ops-check passes the loop's own check once its report is on a branch" "O
 "$AGENT_OPS_DIR/runners/triage.sh"
 expect "the runner logs Claude's run and the check under the loop's name" "grep -q '\"loop\":\"triage\".*\"subtype\":\"success\".*\"cost\":0.42' $AGENT_OPS_DIR/runs.jsonl && tail -1 $AGENT_OPS_DIR/runs.jsonl | grep -q '\"loop\":\"triage\",.*\"check\":\"pass\"'"
 
-out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --checked-by triage --budget 2.5 --turns 20 --mission "merged PRs | week" --project "A|B" 2>&1)
+out=$(scaffold --name growth --runtime cron --schedule "30 6 * * 1-5" --floor "at least 1000 commits" --measure "git rev-list --count origin/trunk" --read-by triage --budget 2.5 --turns 20 --mission "merged PRs | week" --project "A|B" 2>&1)
 expect "new-loop scaffolds a cron loop next to the first" "[ \$? = 0 ] && grep -q '^30 6 \* \* 1-5 PATH=.* AGENT_OPS_DIR=.*runners/growth.sh' $AGENT_OPS_DIR/schedules/growth.cron"
 expect "a | in an answer is escaped in the KPI table and the registry" "grep -qF '| merged PRs \\| week | at least 1000 commits |' docs/loops/growth.md && grep -qF '| growth | A\\|B | cron |' $AGENT_OPS_DIR/REGISTRY.md"
 report growth && land growth
 expect "a check fails when the Floor's number isn't met" "! python3 $AGENT_OPS_DIR/checks/growth.py > $s/growth.out && grep -q 'is not at least the Floor of 1000' $s/growth.out"
 out=$(scaffold --name weekly --runtime cloud --schedule "0 9 * * 1" --floor "unmeasured: no issue data yet" --supervisor triage 2>&1)
 expect "new-loop writes a cloud routine prompt that points at the charter" "[ \$? = 0 ] && grep -q 'Read docs/loops/weekly.md and run it' $AGENT_OPS_DIR/schedules/weekly.routine.md && [ ! -e $AGENT_OPS_DIR/runners/weekly.sh ]"
-expect "a supervised loop is checked by its supervisor" "grep -q '^| weekly |  | cloud | routine:weekly | .* | triage | triage |  |  |\$' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^Supervisor: triage, Mondays' docs/orders/weekly.md"
+expect "a supervised loop is read by its supervisor" "grep -q '^| weekly |  | cloud | routine:weekly | .* | triage | triage |  |  |\$' $AGENT_OPS_DIR/REGISTRY.md && grep -q '^Supervisor: triage, Mondays' docs/orders/weekly.md"
 out=$(AGENT_OPS_REGISTRY=$s/elsewhere/fleet-registry.md scaffold --name movable --runtime cloud --schedule "0 9 * * 2" --floor "unmeasured: x" 2>&1)
 expect "AGENT_OPS_REGISTRY moves the registry row out of AGENT_OPS_DIR" "[ \$? = 0 ] && grep -q '^| movable |' $s/elsewhere/fleet-registry.md && ! grep -q '^| movable |' $AGENT_OPS_DIR/REGISTRY.md && grep -q 'fleet-registry.md' <<<\"\$out\""
 expect "launchd refuses a schedule it can't express" "! scaffold --name ranged --runtime launchd --schedule '0 9 * * 1-5' --floor 'unmeasured: x' >/dev/null 2>&1"

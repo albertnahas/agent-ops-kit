@@ -59,7 +59,7 @@ def args():
     a.repo = Path(a.repo or top or ".").expanduser().resolve()
     ascii_name = unicodedata.normalize("NFKD", a.repo.name).encode("ascii", "ignore").decode().lower()
     a.name = a.name or re.sub(r"[^a-z0-9_.-]+", "-", ascii_name).strip("-.")
-    a.checked_by = a.checked_by or a.supervisor or "you"
+    a.read_by = a.read_by or a.supervisor or "you"
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", a.name) or a.name.lower() in ("you", "nobody", "adhoc"):
         p.error("--name is letters, digits, _ . and -, and not you, nobody or adhoc; pass one when the repo's folder name gives none")
     if not a.reschedule and re.match(LEVEL, a.floor, re.I) and not a.measure:
@@ -140,7 +140,7 @@ def label(a):
 def registry_row(a, charter):
     check = f"report and Floor (`checks/{a.name}.py`)"
     cells = [a.name, a.project, RUNTIMES[a.runtime]["runtime"], RUNTIMES[a.runtime]["job"].format(name=a.name), a.schedule,
-             f"`{charter}`", check, a.checked_by, a.supervisor, a.escalates_to, a.role]
+             f"`{charter}`", check, a.read_by, a.supervisor, a.escalates_to, a.role]
     return "| " + " | ".join(map(cell, cells)) + " |"
 
 
