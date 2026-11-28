@@ -96,6 +96,7 @@ expect "accented folder names become plain letters, found from a subfolder" "[ -
 blank=$("$kit/bin/new-loop" --mission '  ' --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' 2>&1)
 expect "a blank required answer counts as missing" "grep -q 'missing --mission\$' <<<\"\$blank\""
 git init -q "$s/日本" && expect "a folder name with nothing usable asks for --name" "(cd $s/日本 && ! $kit/bin/new-loop --mission m --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' 2>&1 | grep -q 'pass one when')" 
+expect "adhoc is reserved for runs with no loop name" "(cd $s/日本 && ! $kit/bin/new-loop --name adhoc --mission m --source s --floor 'unmeasured: x' --runtime cloud --schedule '0 8 * * *' >$s/adhoc.out 2>&1) && grep -q 'nobody or adhoc' $s/adhoc.out"
 expect "nothing was installed with launchctl or crontab" "[ ! -e $s/scheduled ]"
 
 if [ -f "$factory/fleet/fleet.py" ]; then

@@ -6,7 +6,7 @@
 # last check, not Claude's exit code, and a check also fails when the loop's last ledger line is a Claude run
 # that crashed (usage limit, API error): the files it checks may be yesterday's. Loop name defaults as in claude-run.
 OPS="${AGENT_OPS_DIR:-$HOME/.agent-ops}"; mkdir -p "$OPS"
-LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^(0?|application\..*)$ ]] && LOOP=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+LOOP="${OPS_LOOP:-$XPC_SERVICE_NAME}"; [[ "$LOOP" =~ ^(0?|application\..*)$ ]] && LOOP=adhoc
 [ "$1" = "-l" ] && { LOOP="$2"; shift 2; }
 [ "$1" = "--" ] && shift
 [ $# -gt 0 ] || { echo "ops-check: no check command, so nothing to pass" >&2; exit 2; }
